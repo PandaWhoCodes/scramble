@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>scramble — unjumble with your team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D1117;--card:#151B23;--card2:#1C242E;--border:#2A3442;--text:#F3F6FA;--dim:#93A1B1;--faint:#5C6B7A}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;font-family:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;color:var(--text);
+  background:radial-gradient(1100px 560px at 50% -12%,#17222E 0%,var(--bg) 55%);-webkit-tap-highlight-color:transparent}
+.wrap{max-width:430px;margin:0 auto;padding:36px 20px 48px;display:flex;flex-direction:column;gap:20px}
+.logo{display:flex;align-items:center;gap:8px;user-select:none}
+.logo b{font-size:20px;letter-spacing:-0.02em}
+.logo .beta{font-size:11px;color:var(--faint);border:1px solid var(--border);background:var(--card2);border-radius:99px;padding:2px 8px}
+.dots span{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid var(--bg);margin-left:-5px}
+.dots span:first-child{margin-left:0}
+h1{font-size:clamp(34px,9.5vw,46px);letter-spacing:-0.03em;line-height:1.05}
+h2{font-size:26px;letter-spacing:-0.02em}
+p.dim{color:var(--dim);line-height:1.55}
+.faint{color:var(--faint);font-size:12px;line-height:1.5}
+.strip{display:flex;gap:4px}.strip i{flex:1;height:6px;border-radius:99px}
+.btn{width:100%;padding:16px 24px;border-radius:18px;border:1px solid var(--text);background:var(--text);color:var(--bg);
+  font:inherit;font-weight:700;font-size:16px;cursor:pointer;transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--border)}
+.btn:disabled{opacity:.4;cursor:default}
+.field{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:12px;
+  padding:12px 16px;font:inherit;font-size:16px;outline:none}
+label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-bottom:8px;line-height:1.4}
+.err{display:none;color:#FF9B9B;background:#2A1518;border:1px solid #4A2528;border-radius:12px;padding:12px 16px;font-size:14px}
+.err.show{display:block}
+.hidden{display:none!important}
+.mono{font-family:ui-monospace,Menlo,monospace;letter-spacing:.35em;text-transform:uppercase;text-align:center;font-size:22px}
+.pulse span{width:14px;height:14px;border-radius:50%;display:inline-block;margin:0 3px;animation:pu 1.1s infinite alternate}
+@keyframes pu{from{opacity:.3;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.readybtn{padding:34px 24px;font-size:22px;border-radius:26px}
+.readybtn.on{background:#2ECC71;border-color:#2ECC71;color:#06341B}
+.countline{color:var(--dim);font-size:14px;text-align:center}
+
+#reconnect{position:fixed;top:12px;right:12px;z-index:60;display:none;font-size:12px;font-weight:700;
+  background:#2A1518;color:#FF9B9B;border:1px solid #4A2528;border-radius:99px;padding:6px 12px}
+#reconnect.show{display:block}
+
+#stage{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:22px;cursor:pointer;user-select:none;z-index:10;gap:18px}
+#stage.show{display:flex}
+.pill{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;border-radius:99px;padding:7px 16px}
+.tiles{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;align-items:center;max-width:96vw}
+.tile{font-weight:700;line-height:1;border-radius:.18em;padding:.12em .18em}
+.shape{display:flex;flex-direction:column;gap:8px;align-items:center}
+.shape .word{display:flex;gap:5px}
+.shape .cell{width:16px;height:20px;border-radius:4px;border:2px solid currentColor;opacity:.75}
+.bigname{font-weight:700;line-height:1;font-size:clamp(46px,13vw,84px)}
+.teamnum{font-weight:700;line-height:.95;font-size:clamp(90px,32vw,190px)}
+.mates{font-size:14px;opacity:.9;line-height:1.6;max-width:420px}
+.subtle{font-size:12px;opacity:.65}
+</style>
+</head>
+<body>
+
+<div id="reconnect">reconnecting…</div>
+
+<div class="wrap" id="app">
+  <div class="logo"><span class="dots" id="logodots"></span><b>scramble</b><span class="beta">beta</span></div>
+
+  <!-- room code -->
+  <section id="s-code" class="hidden" style="display:flex;flex-direction:column;gap:18px">
+    <h1>Unjumble it — together.</h1>
+    <p class="dim">Join with your name, get a team color, and each round your team's phones receive the
+      scrambled letters of the answer. Talk, arrange, shout it out first.</p>
+    <div class="strip" id="strip"></div>
+    <div>
+      <label>Room code <small class="faint">— scan the QR at the venue, or type the code on screen</small></label>
+      <input id="code" class="field mono" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="•••••">
+    </div>
+    <div class="err" id="e-code"></div>
+    <button class="btn" id="b-code">Continue</button>
+  </section>
+
+  <!-- name -->
+  <section id="s-name" class="hidden" style="display:flex;flex-direction:column;gap:18px">
+    <h2>What's your name?</h2>
+    <input id="name" class="field" maxlength="30" placeholder="Your name" autocomplete="name">
+    <div class="err" id="e-name"></div>
+    <button class="btn" id="b-name">Join the game</button>
+  </section>
+
+  <!-- lobby -->
+  <section id="s-lobby" class="hidden" style="display:flex;flex-direction:column;gap:18px;text-align:center;align-items:center">
+    <div class="pulse" id="pulse"></div>
+    <h2>You're in, <span id="lb-name"></span></h2>
+    <p class="dim">Tap ready when you are. The host assigns colors once everyone's set.</p>
+    <button class="btn readybtn" id="b-ready">I'm ready</button>
+    <div class="countline" id="lb-counts"></div>
+  </section>
+</div>
+
+<!-- full-screen color stage: team screen, letters, solver -->
+<div id="stage">
+  <div id="st-top" class="pill"></div>
+
+  <!-- team screen (between rounds) -->
+  <div id="st-team" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px">
+    <div class="teamnum" id="tm-num"></div>
+    <div class="bigname" id="tm-color" style="font-size:clamp(28px,7vw,44px)"></div>
+    <p class="mates" id="tm-mates"></p>
+    <p class="subtle" id="tm-copy">Gather your color. Letters land here when the host starts the round.</p>
+  </div>
+
+  <!-- letters -->
+  <div id="st-round" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:16px;width:100%">
+    <div class="tiles" id="tiles"></div>
+    <div class="shape" id="shape"></div>
+    <p class="mates" id="rd-mates"></p>
+    <p class="subtle" id="rd-hint">Hold your letters up · tap for beacon mode</p>
+  </div>
+</div>
+
+<script>
+const PALETTE=["#FF3B30","#0A84FF","#2ECC71","#FFD60A","#AF52DE","#FF9500","#FF2D92","#00C7BE","#5856D6","#BEF264","#32ADE6","#A2845E"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const err=(id,msg)=>{const e=$(id);e.textContent=msg||"";e.classList.toggle("show",!!msg);};
+const sections=["s-code","s-name","s-lobby"];
+function showSection(id){sections.forEach(s=>$(s).classList.toggle("hidden",s!==id));$("stage").classList.remove("show");}
+function showStage(){sections.forEach(s=>$(s).classList.add("hidden"));$("stage").classList.add("show");}
+
+$("logodots").innerHTML=PALETTE.slice(0,4).map(c=>`<span style="background:${c}"></span>`).join("");
+$("strip").innerHTML=PALETTE.map(c=>`<i style="background:${c}"></i>`).join("");
+$("pulse").innerHTML=PALETTE.slice(0,6).map(c=>`<span style="background:${c}"></span>`).join("");
+
+/* ---------------- identity: UUID pid survives refreshes ------------- */
+let pid=localStorage.getItem("scramble_pid");
+if(!pid){
+  pid=(crypto.randomUUID?crypto.randomUUID():([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>(c^crypto.getRandomValues(new Uint8Array(1))[0]&15>>c/4).toString(16)));
+  localStorage.setItem("scramble_pid",pid);
+}
+let code=(new URLSearchParams(location.search).get("c")||localStorage.getItem("scramble_code")||"").toUpperCase();
+let name=localStorage.getItem("scramble_name")||"";
+
+/* ---------------- ui state (render is otherwise pure) --------------- */
+let joined=false, beacon=false, lastRound=null, lastRejoin=0, readyBusy=false, lastState=null;
+
+/* ---------------- resilient poll loop: DB is the truth -------------- */
+let fails=0, pollTimer=null;
+const BASE_IV=()=>2600+Math.random()*1200;
+
+function schedule(ms){clearTimeout(pollTimer);pollTimer=setTimeout(tick,ms);}
+
+async function tick(){
+  let st;
+  try{
+    const r=await fetch("/api/state?pid="+encodeURIComponent(pid),{cache:"no-store"});
+    st=await r.json();
+    lastState=st;
+    fails=0;$("reconnect").classList.remove("show");
+  }catch(e){
+    fails++;$("reconnect").classList.add("show");
+    return schedule(Math.min(BASE_IV()*Math.pow(1.6,fails),15000)); // keep last screen, retry with backoff
+  }
+  try{render(st);}catch(e){console.error(e);}
+  schedule(BASE_IV());
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick();});
+window.addEventListener("online",()=>tick());
+
+/* ------------------------------ render ------------------------------ */
+function render(st){
+  if(!st.exists){
+    joined=false;showSection("s-code");
+    err("e-code","No open room right now — ask your host, then continue.");
+    return;
+  }
+  // We exist client-side but the server doesn't know us (fresh session,
+  // host reset, wiped DB): silently rejoin with stored identity.
+  if(!st.you){
+    joined=false;
+    if(name&&code&&Date.now()-lastRejoin>8000){lastRejoin=Date.now();autoRejoin();}
+    else if(!name){showSection(code?"s-name":"s-code");}
+    return;
+  }
+  joined=true;
+
+  if(st.phase==="lobby"){
+    beacon=false;lastRound=null;
+    $("lb-name").textContent=st.you.name;
+    const rb=$("b-ready");
+    rb.classList.toggle("on",st.you.ready);
+    rb.textContent=st.you.ready?"Ready ✓ (tap to undo)":"I'm ready";
+    $("lb-counts").textContent=`${st.counts.players} in · ${st.counts.ready} ready`;
+    showSection("s-lobby");
+    return;
+  }
+
+  // phase: live
+  const col=st.you.color||{hex:"#1C242E",fg:"#F3F6FA",name:""};
+  const stage=$("stage");stage.style.background=col.hex;stage.style.color=col.fg;
+  const overlay=col.fg==="#FFFFFF"?"rgba(0,0,0,.18)":"rgba(255,255,255,.35)";
+  showStage();
+
+  if(st.round&&st.round.idx!==lastRound){lastRound=st.round.idx;beacon=false;}
+  if(!st.round)lastRound=null;
+
+  if(!st.round){ // team screen between rounds
+    $("st-top").textContent="Your team";$("st-top").style.background=overlay;
+    $("st-team").classList.remove("hidden");$("st-round").classList.add("hidden");
+    $("tm-num").textContent=st.you.team_number||"";
+    $("tm-color").textContent=col.name;
+    $("tm-mates").textContent=st.you.teammates.length?("With: "+st.you.teammates.join(" · ")):"";
+    $("tm-copy").textContent="Gather your color. Letters land here when the host starts the round.";
+    return;
+  }
+
+  // active round
+  $("st-team").classList.add("hidden");$("st-round").classList.remove("hidden");
+  $("st-top").textContent=`Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""} · ${col.name}`;
+  $("st-top").style.background=overlay;
+
+  if(!st.round.in_round){ // joined after this round was dealt
+    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(22px,6vw,34px);padding:.5em .7em">You're on team ${st.you.team_number} — you get a piece next round. Help them solve!</div>`;
+    renderShape(st.round,overlay);$("rd-mates").textContent="";$("rd-hint").textContent="";
+    return;
+  }
+
+  const pieces=st.round.pieces||[];
+  if(pieces.length===0){ // solver
+    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(30px,9vw,52px);padding:.4em .6em">SOLVER</div>`;
+    $("rd-hint").textContent="No piece for you — direct your team's line-up!";
+  }else{
+    const maxLen=Math.max(...pieces.map(p=>p.length));
+    const fs=beacon
+      ?`min(${(88/maxLen).toFixed(1)}vw, 40vh)`
+      :`min(${(64/maxLen).toFixed(1)}vw, 22vh)`;
+    $("tiles").innerHTML=pieces.map(p=>`<div class="tile" style="background:${overlay};font-size:${fs};letter-spacing:.05em">${esc(p)}</div>`).join("");
+    $("rd-hint").textContent=beacon
+      ?"tap to show details"
+      :(pieces.length>1
+        ?"Solo round: put your pieces in order!"
+        :"Your piece reads in order — the jumble is across phones. Line up!");
+  }
+  if(beacon){$("shape").innerHTML="";$("rd-mates").textContent="";}
+  else{renderShape(st.round,overlay);$("rd-mates").textContent=st.you.teammates.length?("Team: "+st.you.teammates.join(" · ")):"";}
+}
+
+function renderShape(round,overlay){
+  const words=(round.shape||[]).map(n=>`<div class="word">${'<span class="cell"></span>'.repeat(Math.min(n,14))}</div>`).join("");
+  const label=`<div class="subtle">${round.shape.length} word${round.shape.length>1?"s":""} · ${round.letter_count} letters</div>`;
+  $("shape").innerHTML=words+label;
+}
+
+/* ------------------------------ actions ----------------------------- */
+$("b-code").onclick=()=>{
+  code=$("code").value.trim().toUpperCase();
+  if(!code)return err("e-code","Type the room code from the QR or the screen.");
+  err("e-code");localStorage.setItem("scramble_code",code);showSection("s-name");
+  $("name").value=name;
+};
+
+$("b-name").onclick=async()=>{
+  name=$("name").value.trim();
+  if(!name)return err("e-name","Add your name so your team can find you.");
+  localStorage.setItem("scramble_name",name);
+  err("e-name");$("b-name").disabled=true;
+  try{
+    const r=await fetch("/api/join",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({code,pid,name})});
+    const d=await r.json();
+    if(!r.ok){
+      if(r.status===403){showSection("s-code");err("e-code",d.detail||"Wrong room code.");return;}
+      return err("e-name",d.detail||"Couldn't join — try again.");
+    }
+    joined=true;tick();
+  }catch(e){err("e-name","Network hiccup — try again.");}
+  finally{$("b-name").disabled=false;}
+};
+
+async function autoRejoin(){
+  try{await fetch("/api/join",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({code,pid,name})});}catch(e){}
+}
+
+$("b-ready").onclick=async()=>{
+  if(readyBusy)return;readyBusy=true;
+  const on=!$("b-ready").classList.contains("on");
+  try{await fetch("/api/ready",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({code,pid,ready:on})});}catch(e){}
+  readyBusy=false;tick();
+};
+
+$("stage").onclick=()=>{beacon=!beacon;if(lastState)render(lastState);};
+
+/* ------------------------------- boot ------------------------------- */
+function boot(){
+  $("code").value=code;$("name").value=name;
+  if(!code){showSection("s-code");}
+  else if(!name){showSection("s-name");}
+  else{showSection("s-name");} // render() takes over as soon as state says we're in
+  tick();
+}
+boot();
+</script>
+</body>
+</html>
