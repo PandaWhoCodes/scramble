@@ -240,8 +240,32 @@ function render(st){
       const availH=Math.max(180,window.innerHeight-(info?170:70));
       const s=(t.rot%180===0)?Math.min(availW/vw,availH/vh):Math.min(availW/vh,availH/vw);
       const outerW=(t.rot%180===0)?vw*s:vh*s, outerH=(t.rot%180===0)?vh*s:vw*s;
-      $("tiles").innerHTML=`<div style="position:relative;width:${outerW}px;height:${outerH}px">
-        <div style="position:absolute;width:${vw*s}px;height:${vh*s}px;left:${(outerW-vw*s)/2}px;top:${(outerH-vh*s)/2}px;
+      const eps = 1.0;
+      let aX = "center", aY = "center";
+      if (Math.abs(t.w - t.vb[2]) < eps) aX = "stretch";
+      else if (Math.abs(t.vb[0]) < eps) aX = "right";
+      else if (Math.abs(t.vb[0] + t.vb[2] - t.w) < eps) aX = "left";
+      
+      if (Math.abs(t.h - t.vb[3]) < eps) aY = "stretch";
+      else if (Math.abs(t.vb[1]) < eps) aY = "bottom";
+      else if (Math.abs(t.vb[1] + t.vb[3] - t.h) < eps) aY = "top";
+
+      let rx = {"left":-1, "center":0, "right":1, "stretch":2}[aX];
+      let ry = {"top":-1, "center":0, "bottom":1, "stretch":2}[aY];
+      for (let i = 0; i < t.rot; i += 90) {
+        let nx = (ry === 2) ? 2 : -ry;
+        let ny = (rx === 2) ? 2 : rx;
+        rx = nx; ry = ny;
+      }
+
+      let leftPx = (rx === -1) ? 0 : (rx === 1) ? availW - outerW : (availW - outerW) / 2;
+      let topPx = (ry === -1) ? 0 : (ry === 1) ? availH - outerH : (availH - outerH) / 2;
+      
+      let cssLeft = leftPx - (vw*s - outerW)/2;
+      let cssTop = topPx - (vh*s - outerH)/2;
+
+      $("tiles").innerHTML=`<div style="position:relative;width:${availW}px;height:${availH}px">
+        <div style="position:absolute;width:${vw*s}px;height:${vh*s}px;left:${cssLeft}px;top:${cssTop}px;
           transform:rotate(${t.rot}deg);border-radius:6px;overflow:hidden;box-shadow:0 0 0 2px ${overlay}, 0 10px 34px rgba(0,0,0,.35)">
           ${puzzleSVG(t,col,vw*s,vh*s)}</div></div>`;
       $("rd-hint").textContent=!info?""
