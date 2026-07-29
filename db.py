@@ -30,6 +30,8 @@ _STATEMENTS = [
         pin_hash TEXT NOT NULL,
         team_count INTEGER NOT NULL DEFAULT 2,
         current_round INTEGER NOT NULL DEFAULT -1,
+        edge_marks INTEGER NOT NULL DEFAULT 1,
+        allow_flips INTEGER NOT NULL DEFAULT 1,
         opened_at INTEGER NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS player (
@@ -74,6 +76,14 @@ class Store:
         with self._lock:
             for stmt in _STATEMENTS:
                 self._conn.execute(stmt)
+            for mig in (
+                "ALTER TABLE room ADD COLUMN edge_marks INTEGER NOT NULL DEFAULT 1",
+                "ALTER TABLE room ADD COLUMN allow_flips INTEGER NOT NULL DEFAULT 1",
+            ):
+                try:
+                    self._conn.execute(mig)
+                except Exception:
+                    pass  # column already exists
             self._conn.commit()
 
     def _exec(self, sql, params=()):
@@ -90,8 +100,8 @@ class Store:
 
     def get_room(self):
         rows = self._query(
-            "SELECT session_id, phase, join_code, pin_hash, team_count, current_round, opened_at "
-            "FROM room WHERE id = 1"
+            "SELECT session_id, phase, join_code, pin_hash, team_count, current_round, "
+            "edge_marks, allow_flips, opened_at FROM room WHERE id = 1"
         )
         if not rows:
             return None
@@ -103,13 +113,15 @@ class Store:
             "pin_hash": r[3],
             "team_count": int(r[4]),
             "current_round": int(r[5]),
-            "opened_at": r[6],
+            "edge_marks": bool(r[6]),
+            "allow_flips": bool(r[7]),
+            "opened_at": r[8],
         }
 
     def open_room(self, session_id, join_code, pin_hash, ts):
         self._exec(
-            "INSERT OR REPLACE INTO room (id, session_id, phase, join_code, pin_hash, team_count, current_round, opened_at) "
-            "VALUES (1, ?, 'lobby', ?, ?, 2, -1, ?)",
+            "INSERT OR REPLACE INTO room (id, session_id, phase, join_code, pin_hash, team_count, current_round, "
+            "edge_marks, allow_flips, opened_at) VALUES (1, ?, 'lobby', ?, ?, 2, -1, 1, 1, ?)",
             (session_id, join_code, pin_hash, ts),
         )
 
@@ -118,6 +130,12 @@ class Store:
 
     def set_team_count(self, n):
         self._exec("UPDATE room SET team_count = ? WHERE id = 1", (n,))
+
+    def set_settings(self, edge_marks, allow_flips):
+        self._exec(
+            "UPDATE room SET edge_marks = ?, allow_flips = ? WHERE id = 1",
+            (1 if edge_marks else 0, 1 if allow_flips else 0),
+        )
 
     def set_current_round(self, idx):
         self._exec("UPDATE room SET current_round = ? WHERE id = 1", (idx,))

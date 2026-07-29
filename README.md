@@ -18,9 +18,27 @@ of server state.
    *which piece landed on which phone*. Teams solve by physically lining up
    their phones, not by staring at their own screen.
 4. If a team has more people than the word has letters, the extras become
-   **Solvers** — no piece, they see the word shape and direct the line-up.
+   **Solvers** — no piece; they direct the line-up.
    A solo team would see the whole answer, so that one phone gets up to 3
    shuffled pieces instead — a self-contained mini-puzzle.
+5. **PUZZLE mode — answers of 4 letters or fewer.** Short answers deal as
+   jigsaw tiles of the *drawn* word instead of text pieces. Each team
+   independently gets the best split plan for its size (auto-picked by the
+   same ranking as the lab): a rows×cols slice of the word canvas, sometimes
+   as letter groups ("EV" as a 2×2 + "E" solo for a team of 5). Every phone
+   receives a viewBox crop plus a rotation — wide tiles force landscape,
+   tall tiles portrait, and upside-down is in the mix — so players must find
+   both their spot *and* how to hold their phone. Phone screens are
+   deliberately minimal: just the tile (or piece), nothing else — a tap
+   toggles a small round-number pill and a rotate hint. Optional **edge-match
+   marks** (half-dots that complete across a seam) confirm correct placement.
+   Two host toggles control this: *Edge-match marks* and *Allow upside-down*,
+   baked into each deal so replays are stable (Re-deal applies changes now).
+
+   One honest trade-off: in puzzle mode a phone renders its crop from the
+   full group text, so the answer is technically present in the page source
+   during the round. Fine for party play; if it ever matters, the hardening
+   path is server-side tile rendering to PNG.
 5. **Back** returns to the previous round (the exact same deal is replayed
    from its stored snapshot), **Re-deal** reshuffles the current round — e.g.
    after a late joiner, who gets a team immediately but letters only when the

@@ -142,7 +142,7 @@ let code=(new URLSearchParams(location.search).get("c")||localStorage.getItem("s
 let name=localStorage.getItem("scramble_name")||"";
 
 /* ---------------- ui state (render is otherwise pure) --------------- */
-let joined=false, beacon=false, lastRound=null, lastRejoin=0, readyBusy=false, lastState=null;
+let joined=false, info=false, lastRound=null, lastRejoin=0, readyBusy=false, lastState=null;
 
 /* ---------------- resilient poll loop: DB is the truth -------------- */
 let fails=0, pollTimer=null;
@@ -185,7 +185,7 @@ function render(st){
   joined=true;
 
   if(st.phase==="lobby"){
-    beacon=false;lastRound=null;
+    info=false;lastRound=null;
     $("lb-name").textContent=st.you.name;
     const rb=$("b-ready");
     rb.classList.toggle("on",st.you.ready);
@@ -201,7 +201,7 @@ function render(st){
   const overlay=col.fg==="#FFFFFF"?"rgba(0,0,0,.18)":"rgba(255,255,255,.35)";
   showStage();
 
-  if(st.round&&st.round.idx!==lastRound){lastRound=st.round.idx;beacon=false;}
+  if(st.round&&st.round.idx!==lastRound){lastRound=st.round.idx;info=false;}
   if(!st.round)lastRound=null;
 
   if(!st.round){ // team screen between rounds
@@ -210,45 +210,70 @@ function render(st){
     $("tm-num").textContent=st.you.team_number||"";
     $("tm-color").textContent=col.name;
     $("tm-mates").textContent=st.you.teammates.length?("With: "+st.you.teammates.join(" · ")):"";
-    $("tm-copy").textContent="Gather your color. Letters land here when the host starts the round.";
+    $("tm-copy").textContent="Gather your color. Your piece of the answer lands here when the host starts the round.";
     return;
   }
 
-  // active round
+  // active round — MINIMAL by default: just your piece/tile, nothing else.
+  // A tap toggles a small info layer (round number + hint). No shape boxes,
+  // no teammate list — the screen IS the game piece.
   $("st-team").classList.add("hidden");$("st-round").classList.remove("hidden");
-  $("st-top").textContent=`Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""} · ${col.name}`;
+  $("st-top").textContent=`Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""}`;
   $("st-top").style.background=overlay;
+  $("st-top").style.visibility=info?"visible":"hidden";
+  $("shape").innerHTML="";$("rd-mates").textContent="";
 
   if(!st.round.in_round){ // joined after this round was dealt
-    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(22px,6vw,34px);padding:.5em .7em">You're on team ${st.you.team_number} — you get a piece next round. Help them solve!</div>`;
-    renderShape(st.round,overlay);$("rd-mates").textContent="";$("rd-hint").textContent="";
+    $("st-top").style.visibility="visible";
+    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(22px,6vw,34px);padding:.5em .7em">You're on team ${st.you.team_number} — you join the next deal. Help them solve!</div>`;
+    $("rd-hint").textContent="";
     return;
   }
 
+  if(st.round.mode==="puzzle"){
+    if(st.round.solver||!st.round.tile){
+      $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(34px,11vw,60px);padding:.4em .6em">SOLVER</div>`;
+      $("rd-hint").textContent=info?"No tile for you — direct the placing and turning!":"";
+    }else{
+      const t=st.round.tile,[vx,vy,vw,vh]=t.vb;
+      const availW=window.innerWidth-24;
+      const availH=Math.max(180,window.innerHeight-(info?170:70));
+      const s=(t.rot%180===0)?Math.min(availW/vw,availH/vh):Math.min(availW/vh,availH/vw);
+      const outerW=(t.rot%180===0)?vw*s:vh*s, outerH=(t.rot%180===0)?vh*s:vw*s;
+      $("tiles").innerHTML=`<div style="position:relative;width:${outerW}px;height:${outerH}px">
+        <div style="position:absolute;width:${vw*s}px;height:${vh*s}px;left:${(outerW-vw*s)/2}px;top:${(outerH-vh*s)/2}px;
+          transform:rotate(${t.rot}deg);border-radius:6px;overflow:hidden;box-shadow:0 0 0 2px ${overlay}, 0 10px 34px rgba(0,0,0,.35)">
+          ${puzzleSVG(t,col,vw*s,vh*s)}</div></div>`;
+      $("rd-hint").textContent=!info?""
+        :(t.rot===0?"Held upright — find your spot in the word!"
+          :`Rotate your phone ${t.rot===180?"180°":(t.rot===90?"90° ⟲":"90° ⟳")} — then find your spot!`);
+    }
+  }else{
   const pieces=st.round.pieces||[];
   if(pieces.length===0){ // solver
-    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(30px,9vw,52px);padding:.4em .6em">SOLVER</div>`;
-    $("rd-hint").textContent="No piece for you — direct your team's line-up!";
+    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(34px,11vw,60px);padding:.4em .6em">SOLVER</div>`;
+    $("rd-hint").textContent=info?"No piece for you — direct your team's line-up!":"";
   }else{
     const maxLen=Math.max(...pieces.map(p=>p.length));
-    const fs=beacon
-      ?`min(${(88/maxLen).toFixed(1)}vw, 40vh)`
-      :`min(${(64/maxLen).toFixed(1)}vw, 22vh)`;
+    const fs=`min(${(88/maxLen).toFixed(1)}vw, ${info?"34vh":"42vh"})`;
     $("tiles").innerHTML=pieces.map(p=>`<div class="tile" style="background:${overlay};font-size:${fs};letter-spacing:.05em">${esc(p)}</div>`).join("");
-    $("rd-hint").textContent=beacon
-      ?"tap to show details"
+    $("rd-hint").textContent=!info?""
       :(pieces.length>1
         ?"Solo round: put your pieces in order!"
         :"Your piece reads in order — the jumble is across phones. Line up!");
   }
-  if(beacon){$("shape").innerHTML="";$("rd-mates").textContent="";}
-  else{renderShape(st.round,overlay);$("rd-mates").textContent=st.you.teammates.length?("Team: "+st.you.teammates.join(" · ")):"";}
+  }
 }
 
-function renderShape(round,overlay){
-  const words=(round.shape||[]).map(n=>`<div class="word">${'<span class="cell"></span>'.repeat(Math.min(n,14))}</div>`).join("");
-  const label=`<div class="subtle">${round.shape.length} word${round.shape.length>1?"s":""} · ${round.letter_count} letters</div>`;
-  $("shape").innerHTML=words+label;
+/* Puzzle tiles: every phone draws the SAME word canvas (per-letter cells,
+   textLength-pinned so geometry is identical everywhere) and crops its own
+   viewBox. Rotation is a CSS transform; the player rotates the phone back. */
+function puzzleSVG(t,col,pw,ph){
+  const letters=[...t.text].map((ch,i)=>
+    `<text x="${i*100+50}" y="${t.h/2}" font-size="104" font-weight="700" fill="${col.fg}" text-anchor="middle" dominant-baseline="central" textLength="84" lengthAdjust="spacingAndGlyphs" font-family="'Space Grotesk',sans-serif">${esc(ch)}</text>`).join("");
+  const marks=(t.marks||[]).map(m=>
+    `<circle cx="${m.x}" cy="${m.y}" r="9" fill="${m.c}" stroke="#0D1117" stroke-width="2.5"/>`).join("");
+  return `<svg width="${pw}" height="${ph}" viewBox="${t.vb.join(" ")}" xmlns="http://www.w3.org/2000/svg" style="display:block"><rect width="${t.w}" height="${t.h}" fill="${col.hex}"/>${letters}${marks}</svg>`;
 }
 
 /* ------------------------------ actions ----------------------------- */
@@ -290,7 +315,7 @@ $("b-ready").onclick=async()=>{
   readyBusy=false;tick();
 };
 
-$("stage").onclick=()=>{beacon=!beacon;if(lastState)render(lastState);};
+$("stage").onclick=()=>{info=!info;if(lastState)render(lastState);};
 
 /* ------------------------------- boot ------------------------------- */
 function boot(){

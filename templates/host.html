@@ -53,6 +53,8 @@ label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-botto
 .code{font-family:ui-monospace,Menlo,monospace;font-size:32px;letter-spacing:.35em;font-weight:700}
 .joinrow{display:flex;gap:24px;flex-wrap:wrap;align-items:center}
 .row{display:flex;gap:12px;flex-wrap:wrap}
+.tgl{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim);cursor:pointer;user-select:none}
+.tgl input{accent-color:#2ECC71;width:16px;height:16px}
 .roundword{font-size:clamp(26px,4.5vw,40px);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));margin-top:14px}
 .gcard{border:1px solid var(--border);border-radius:14px;overflow:hidden}
@@ -139,6 +141,16 @@ a{color:var(--dim)}
       </div>
       <div class="err" id="e-round" style="margin-top:12px"></div>
       <div class="grid" id="teamgrid"></div>
+    </div>
+
+    <!-- puzzle settings -->
+    <div class="card">
+      <label>Puzzle mode <span class="faint">— answers of 4 letters or fewer deal as jigsaw tiles of the drawn word</span></label>
+      <div class="row" style="align-items:center;margin-top:6px">
+        <label class="tgl"><input type="checkbox" id="s-marks"> Edge-match marks</label>
+        <label class="tgl"><input type="checkbox" id="s-flips"> Allow upside-down</label>
+      </div>
+      <p class="faint" style="margin-top:10px">Baked in at deal time — changes apply from the next round, or hit Re-deal to apply now.</p>
     </div>
 
     <!-- answers -->
@@ -254,6 +266,9 @@ function renderAll(){
   $("anscount").textContent="· "+hs.answers.length+" saved";
   if(!ansDirty&&document.activeElement!==$("ans"))$("ans").value=hs.answers.join("\n");
 
+  // puzzle settings
+  if(hs.settings){$("s-marks").checked=hs.settings.edge_marks;$("s-flips").checked=hs.settings.allow_flips;}
+
   if(live)renderRound();
 }
 
@@ -267,7 +282,10 @@ function renderRound(){
     const snap=hs.snapshot||{};
     $("roundpill").textContent=`Round ${cur+1} of ${hs.answers.length}`;
     $("roundword").textContent=snap.answer||hs.answers[cur]||"—";
-    $("roundmeta").textContent=snap.shape?`${snap.shape.length} word(s) · ${snap.letter_count} letters, dealt as in-order pieces — only you can see the answer`:"";
+    $("roundmeta").textContent=!snap.shape?"":
+      (snap.mode==="puzzle"
+        ?`PUZZLE — ${snap.letter_count} letters sliced as rotatable tiles, per team — only you can see the answer`
+        :`${snap.shape.length} word(s) · ${snap.letter_count} letters, dealt as in-order pieces — only you can see the answer`);
   }
   $("b-back").disabled=cur<0;
   $("b-next").disabled=cur+1>=hs.answers.length;
@@ -281,10 +299,15 @@ function renderRound(){
   grid.innerHTML=Object.keys(teams).sort((a,b)=>a-b).map(ci=>{
     const c=hs.palette[ci%hs.palette.length];
     const rows=teams[ci].map(p=>{
-      const l=hs.snapshot.assignments[p.pid];
-      const right=l===undefined?'<span class="tag">JOINED LATE</span>'
-        :(l.length===0?'<span class="tag">SOLVER</span>'
-        :`<b>${l.map(esc).join(" · ")}</b>`);
+      const a=hs.snapshot.assignments[p.pid];
+      let right;
+      if(a===undefined)right='<span class="tag">JOINED LATE</span>';
+      else if(hs.snapshot.mode==="puzzle"){
+        right=a.solver?'<span class="tag">SOLVER</span>'
+          :`<b>${esc(hs.snapshot.teams[String(p.color_idx)].groups[a.g].text)}</b> <span class="tag">r${a.rc[0]+1}c${a.rc[1]+1} · ${a.rot}°</span>`;
+      }else{
+        right=a.length===0?'<span class="tag">SOLVER</span>':`<b>${a.map(esc).join(" · ")}</b>`;
+      }
       return `<div class="lrow"><span>${esc(p.name)}</span>${right}</div>`;
     }).join("");
     return `<div class="gcard"><div class="ghead" style="background:${c.hex};color:${c.fg}"><span>Team ${+ci+1}</span><span>${esc(c.name)}</span></div><div class="gbody">${rows}</div></div>`;
@@ -318,6 +341,14 @@ async function roundAction(action){
   try{await api("/api/host/round",{method:"POST",body:JSON.stringify({action})});await refresh();}
   catch(e){err("e-round",e.message);}
 }
+async function pushSettings(){
+  try{await api("/api/host/settings",{method:"POST",
+    body:JSON.stringify({edge_marks:$("s-marks").checked,allow_flips:$("s-flips").checked})});}
+  catch(e){err("e-dash",e.message);}
+}
+$("s-marks").onchange=pushSettings;
+$("s-flips").onchange=pushSettings;
+
 $("b-next").onclick=()=>roundAction("next");
 $("b-back").onclick=()=>roundAction("back");
 $("b-redeal").onclick=()=>roundAction("redeal");

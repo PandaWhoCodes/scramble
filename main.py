@@ -165,6 +165,11 @@ class TeamsBody(BaseModel):
     team_count: int = Field(ge=2, le=MAX_TEAMS)
 
 
+class SettingsBody(BaseModel):
+    edge_marks: bool
+    allow_flips: bool
+
+
 class RoundBody(BaseModel):
     action: str  # "next" | "back" | "redeal"
 
@@ -242,14 +247,31 @@ def state(pid: str = ""):
     out["you"] = you
 
     if room["phase"] == "live" and snapshot and room["current_round"] == snapshot["idx"]:
-        pieces = snapshot["assignments"].get(pid)  # None -> joined after the deal
-        out["round"] = {
+        a = snapshot["assignments"].get(pid)  # None -> joined after the deal
+        rnd = {
             "idx": snapshot["idx"],
+            "mode": snapshot.get("mode", "pieces"),
             "shape": snapshot["shape"],
             "letter_count": snapshot["letter_count"],
-            "pieces": pieces,
-            "in_round": pieces is not None,
+            "in_round": a is not None,
         }
+        if snapshot.get("mode") == "puzzle":
+            if a is None or a.get("solver"):
+                rnd["solver"] = a is not None
+            else:
+                g = snapshot["teams"][str(me["color_idx"])]["groups"][a["g"]]
+                rnd["solver"] = False
+                rnd["tile"] = {
+                    "text": g["text"],
+                    "w": g["w"],
+                    "h": g["h"],
+                    "vb": a["vb"],
+                    "rot": a["rot"],
+                    "marks": g["marks"],
+                }
+        else:
+            rnd["pieces"] = a
+        out["round"] = rnd
     else:
         out["round"] = None
     return out
@@ -323,6 +345,7 @@ def host_state(request: Request, x_host_pin: str | None = Header(default=None)):
         "join_url": join_url(request, room),
         "team_count": room["team_count"],
         "current_round": room["current_round"],
+        "settings": {"edge_marks": room["edge_marks"], "allow_flips": room["allow_flips"]},
         "players": players,
         "answers": answers,
         "snapshot": snapshot,
@@ -352,6 +375,17 @@ def set_teams(body: TeamsBody, x_host_pin: str | None = Header(default=None)):
     if room["phase"] != "lobby":
         raise HTTPException(409, "Team count can only change in the lobby.")
     store.set_team_count(body.team_count)
+    bust_cache()
+    return {"ok": True}
+
+
+@app.post("/api/host/settings")
+def set_settings(body: SettingsBody, x_host_pin: str | None = Header(default=None)):
+    """Puzzle-mode toggles. Baked into snapshots at deal time, so changes
+    apply from the next Next/Re-deal — never mid-round."""
+    room = require_room()
+    require_host(x_host_pin, room)
+    store.set_settings(body.edge_marks, body.allow_flips)
     bust_cache()
     return {"ok": True}
 
@@ -389,7 +423,8 @@ def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=None)):
         if nxt >= len(answers):
             raise HTTPException(409, "No more answers — add a few more below.")
         if not store.get_round(room["session_id"], nxt):
-            snap = make_snapshot(nxt, answers[nxt], store.list_players(room["session_id"]))
+            snap = make_snapshot(nxt, answers[nxt], store.list_players(room["session_id"]),
+                                 room["edge_marks"], room["allow_flips"])
             store.save_round(room["session_id"], nxt, snap, snap["made_at"])
         store.set_current_round(nxt)
     elif body.action == "back":
@@ -397,7 +432,8 @@ def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=None)):
     elif body.action == "redeal":
         if cur < 0:
             raise HTTPException(400, "No active round to re-deal.")
-        snap = make_snapshot(cur, answers[cur], store.list_players(room["session_id"]))
+        snap = make_snapshot(cur, answers[cur], store.list_players(room["session_id"]),
+                             room["edge_marks"], room["allow_flips"])
         store.save_round(room["session_id"], cur, snap, snap["made_at"])
     else:
         raise HTTPException(400, "Unknown action.")
