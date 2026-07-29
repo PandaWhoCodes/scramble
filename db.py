@@ -28,7 +28,7 @@ _STATEMENTS = [
         phase TEXT NOT NULL,
         join_code TEXT NOT NULL,
         pin_hash TEXT NOT NULL,
-        team_count INTEGER NOT NULL DEFAULT 2,
+        team_count INTEGER NOT NULL DEFAULT 1,
         current_round INTEGER NOT NULL DEFAULT -1,
         edge_marks INTEGER NOT NULL DEFAULT 1,
         allow_flips INTEGER NOT NULL DEFAULT 1,
@@ -121,7 +121,7 @@ class Store:
     def open_room(self, session_id, join_code, pin_hash, ts):
         self._exec(
             "INSERT OR REPLACE INTO room (id, session_id, phase, join_code, pin_hash, team_count, current_round, "
-            "edge_marks, allow_flips, opened_at) VALUES (1, ?, 'lobby', ?, ?, 2, -1, 1, 1, ?)",
+            "edge_marks, allow_flips, opened_at) VALUES (1, ?, 'lobby', ?, ?, 1, -1, 1, 1, ?)",
             (session_id, join_code, pin_hash, ts),
         )
 

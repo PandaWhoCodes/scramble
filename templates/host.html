@@ -257,7 +257,7 @@ function renderAll(){
   }).join("")||'<span class="faint">No one yet…</span>';
 
   // lobby stepper
-  if(!kTouched)k=Math.max(2,Math.min(hs.max_teams,Math.round(hs.players.length/4)||2));
+  if(!kTouched)k=Math.max(1,Math.min(hs.max_teams,Math.round(hs.players.length/4)||1));
   k=Math.min(k,hs.max_teams);
   $("kval").textContent=k;
   $("kper").textContent=hs.players.length?("≈ "+Math.ceil(hs.players.length/k)+" per team"):"";
@@ -314,7 +314,7 @@ function renderRound(){
   }).join("");
 }
 
-$("kminus").onclick=async()=>{kTouched=true;k=Math.max(2,k-1);$("kval").textContent=k;pushTeams();};
+$("kminus").onclick=async()=>{kTouched=true;k=Math.max(1,k-1);$("kval").textContent=k;pushTeams();};
 $("kplus").onclick=async()=>{kTouched=true;k=Math.min(hs.max_teams,k+1);$("kval").textContent=k;pushTeams();};
 async function pushTeams(){try{await api("/api/host/teams",{method:"POST",body:JSON.stringify({team_count:k})});}catch(e){}}
 

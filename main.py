@@ -162,7 +162,7 @@ class AnswersBody(BaseModel):
 
 
 class TeamsBody(BaseModel):
-    team_count: int = Field(ge=2, le=MAX_TEAMS)
+    team_count: int = Field(ge=1, le=MAX_TEAMS)
 
 
 class SettingsBody(BaseModel):
