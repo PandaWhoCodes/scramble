@@ -230,6 +230,9 @@ class SettingsBody(BaseModel):
 class RoundBody(BaseModel):
     action: str  # "next" | "back" | "redeal"
 
+class KickBody(BaseModel):
+    pid: str
+
 
 # ─────────────────────────────────────────────────── pages
 
@@ -579,6 +582,20 @@ async def back_to_lobby(x_host_pin: str | None = Header(default=None)):
     _bump()
 
     _persist(store.reset_to_lobby)
+
+    return {"ok": True}
+
+
+@app.post("/api/host/kick")
+async def kick_player(body: KickBody, x_host_pin: str | None = Header(default=None)):
+    room = _require_room()
+    _require_host(x_host_pin, room)
+
+    player = _find_player(body.pid)
+    if player:
+        _mem["players"].remove(player)
+        _bump()
+        _persist(store.remove_player, room["session_id"], body.pid)
 
     return {"ok": True}
 

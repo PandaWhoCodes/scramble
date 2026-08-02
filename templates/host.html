@@ -261,7 +261,8 @@ function renderAll(){
   $("rcount").textContent=live?"":(ready+" ready");
   $("pchips").innerHTML=hs.players.map(p=>{
     const dot=(live&&p.color_idx>=0)?`<i style="background:${hs.palette[p.color_idx%hs.palette.length].hex}"></i>`:"";
-    return `<span class="chip ${(!live&&p.ready)?"ready":""}">${dot}${esc(p.name)}${(!live&&p.ready)?" ✓":""}</span>`;
+    const escName = esc(p.name).replace(/'/g, "\\'");
+    return `<span class="chip ${(!live&&p.ready)?"ready":""}" style="cursor:pointer" onclick="kick('${p.pid}','${escName}')" title="Kick player">${dot}${esc(p.name)}${(!live&&p.ready)?" ✓":""}</span>`;
   }).join("")||'<span class="faint">No one yet…</span>';
 
   // lobby stepper
@@ -316,7 +317,8 @@ function renderRound(){
       }else{
         right=a.length===0?'<span class="tag">SOLVER</span>':`<b>${a.map(esc).join(" · ")}</b>`;
       }
-      return `<div class="lrow"><span>${esc(p.name)}</span>${right}</div>`;
+      const escName = esc(p.name).replace(/'/g, "\\'");
+      return `<div class="lrow"><span style="cursor:pointer" onclick="kick('${p.pid}','${escName}')" title="Kick player">${esc(p.name)}</span>${right}</div>`;
     }).join("");
     return `<div class="gcard"><div class="ghead" style="background:${c.hex};color:${c.fg}"><span>Team ${+ci+1}</span><span>${esc(c.name)}</span></div><div class="gbody">${rows}</div></div>`;
   }).join("");
@@ -371,6 +373,13 @@ $("b-close").onclick=async()=>{
   if(!confirm("Close the room and delete everything?"))return;
   try{await api("/api/close",{method:"POST",body:"{}"});stopPoll();
     pin="";localStorage.removeItem("scramble_host_pin");show("s-setup");}
+  catch(e){err("e-dash",e.message);}
+};
+
+window.kick = async (pid, name) => {
+  if(!confirm(`Kick ${name} from the game?`))return;
+  err("e-dash");
+  try{await api("/api/host/kick",{method:"POST",body:JSON.stringify({pid})});await refresh();}
   catch(e){err("e-dash",e.message);}
 };
 

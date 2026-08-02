@@ -182,6 +182,9 @@ class Store:
         r = rows[0]
         return {"pid": r[0], "name": r[1], "ready": bool(r[2]), "color_idx": int(r[3])}
 
+    def remove_player(self, session_id, pid):
+        self._exec("DELETE FROM player WHERE session_id = ? AND pid = ?", (session_id, pid))
+
     def list_players(self, session_id):
         rows = self._query(
             "SELECT pid, name, ready, color_idx FROM player WHERE session_id = ? ORDER BY joined_at ASC",
