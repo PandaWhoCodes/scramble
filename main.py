@@ -120,6 +120,7 @@ _mem = {
     "answers": [],      # ["LOVE", "HERO", ...]
     "rounds": {},       # {0: snapshot, 1: snapshot, ...}
     "version": 0,       # monotonic; bumped on every mutation, used for ETags
+    "kicked_pids": set(), # pids that have been removed by the host
 }
 
 
@@ -278,6 +279,7 @@ async def open_room(body: OpenRoomBody, request: Request):
     }
     _mem["players"] = []
     _mem["rounds"] = {}
+    _mem["kicked_pids"] = set()
     answers = [clean_answer(a) for a in body.answers]
     answers = [a for a in answers if a][:MAX_ANSWERS]
     _mem["answers"] = answers
@@ -303,6 +305,10 @@ async def state(pid: str = "", request: Request = None):
         etag = f'W/"{_mem["version"]}"'
         if request.headers.get("if-none-match") == etag:
             return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+
+    if pid in _mem.get("kicked_pids", set()):
+        out = {"exists": True, "kicked": True}
+        return _etag_response(request, out) if request else JSONResponse(out)
 
     players = _mem["players"]
     me = next((p for p in players if p["pid"] == pid), None)
@@ -373,6 +379,9 @@ async def join(body: JoinBody, request: Request):
         raise HTTPException(400, "Name required.")
 
     pid = clean_text(body.pid, 64)
+    if pid in _mem.get("kicked_pids", set()):
+        raise HTTPException(403, "You have been removed from this game by the host.")
+    
     ts = int(time.time() * 1000)
 
     # Memory first
@@ -596,6 +605,9 @@ async def kick_player(body: KickBody, x_host_pin: str | None = Header(default=No
     player = _find_player(body.pid)
     if player:
         _mem["players"].remove(player)
+        if "kicked_pids" not in _mem:
+            _mem["kicked_pids"] = set()
+        _mem["kicked_pids"].add(body.pid)
         _bump()
         _persist(store.remove_player, room["session_id"], body.pid)
 
@@ -611,6 +623,7 @@ async def close_room(x_host_pin: str | None = Header(default=None)):
     _mem["players"] = []
     _mem["answers"] = []
     _mem["rounds"] = {}
+    _mem["kicked_pids"] = set()
     _bump()
 
     _persist(store.close_room)

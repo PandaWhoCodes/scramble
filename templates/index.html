@@ -177,6 +177,14 @@ window.addEventListener("online",()=>tick());
 
 /* ------------------------------ render ------------------------------ */
 function render(st){
+  if(st.kicked){
+    joined=false;
+    clearTimeout(pollTimer);
+    localStorage.removeItem("scramble_code");
+    showSection("s-code");
+    err("e-code","You have been removed from the game by the host.");
+    return;
+  }
   if(!st.exists){
     joined=false;showSection("s-code");
     err("e-code","No open room right now — ask your host, then continue.");
