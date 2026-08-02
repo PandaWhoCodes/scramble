@@ -61,9 +61,13 @@ _STATEMENTS = [
 
 class Store:
     def __init__(self):
+        self._lock = threading.Lock()
+        self._conn = None
+        self.backend = None
+
+    def connect(self):
         url = os.getenv("TURSO_DATABASE_URL")
         token = os.getenv("TURSO_AUTH_TOKEN")
-        self._lock = threading.Lock()
         if url:
             import libsql  # pip install libsql
 

@@ -77,6 +77,7 @@ def _db_worker_init():
     global _worker_store
     from db import Store
     _worker_store = Store()
+    _worker_store.connect()
 
 def _db_worker_task(fn_name, *args):
     try:
@@ -168,6 +169,7 @@ def _etag_response(request: Request, data: dict, extra_headers: dict | None = No
 @app.on_event("startup")
 async def _startup():
     """Hydrate in-memory state from DB once at boot."""
+    store.connect()
     room, players, answers, rounds = store.load_all()
     _mem["room"] = room
     _mem["players"] = players
