@@ -322,8 +322,13 @@ function renderRound(){
       let right;
       if(a===undefined)right='<span class="tag">JOINED LATE</span>';
       else if(hs.snapshot.mode==="puzzle"){
-        right=a.solver?'<span class="tag">SOLVER</span>'
-          :`<b>${esc(hs.snapshot.teams[String(p.color_idx)].groups[a.g].text)}</b> <span class="tag">r${a.rc[0]+1}c${a.rc[1]+1} · ${a.rot}°</span>`;
+        const snapTeam = hs.snapshot.teams[String(p.color_idx)];
+        if(!snapTeam || !snapTeam.groups[a.g]) {
+          right='<span class="tag">MOVED — RE-DEAL</span>';
+        } else {
+          right=a.solver?'<span class="tag">SOLVER</span>'
+            :`<b>${esc(snapTeam.groups[a.g].text)}</b> <span class="tag">r${a.rc[0]+1}c${a.rc[1]+1} · ${a.rot}°</span>`;
+        }
       }else{
         right=a.length===0?'<span class="tag">SOLVER</span>':`<b>${a.map(esc).join(" · ")}</b>`;
       }

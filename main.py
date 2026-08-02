@@ -525,6 +525,15 @@ async def set_teams(body: TeamsBody, x_host_pin: str | None = Header(default=Non
     room["team_count"] = body.team_count
     if room["phase"] == "live":
         _rebalance_teams(_mem["players"], body.team_count, room["session_id"])
+        
+        # Instantly re-deal the current round if one is active so the new teams get correct tiles
+        cur = room["current_round"]
+        if cur >= 0 and cur < len(_mem["answers"]):
+            snap = make_snapshot(cur, _mem["answers"][cur], _mem["players"],
+                                 room["edge_marks"], room["allow_flips"])
+            _mem["rounds"][cur] = snap
+            _persist(store.save_round, room["session_id"], cur, snap, snap["made_at"])
+
     _bump()
     _persist(store.set_team_count, body.team_count)
 
