@@ -312,9 +312,12 @@ function renderRound(){
   if(cur<0||!hs.snapshot){grid.innerHTML="";return;}
   const teams={};
   hs.players.forEach(p=>{if(p.color_idx>=0){(teams[p.color_idx]=teams[p.color_idx]||[]).push(p);}});
-  grid.innerHTML=Object.keys(teams).sort((a,b)=>a-b).map(ci=>{
+  
+  const teamHtml = [];
+  for(let ci=0; ci<hs.team_count; ci++) {
     const c=hs.palette[ci%hs.palette.length];
-    const rows=teams[ci].map(p=>{
+    const members = teams[ci] || [];
+    const rows=members.map(p=>{
       const a=hs.snapshot.assignments[p.pid];
       let right;
       if(a===undefined)right='<span class="tag">JOINED LATE</span>';
@@ -326,9 +329,10 @@ function renderRound(){
       }
       const escName = esc(p.name).replace(/'/g, "\\'");
       return `<div class="lrow"><span style="cursor:pointer" onclick="kick('${p.pid}','${escName}')" title="Kick player">${esc(p.name)}</span>${right}</div>`;
-    }).join("");
-    return `<div class="gcard"><div class="ghead" style="background:${c.hex};color:${c.fg}"><span>Team ${+ci+1}</span><span>${esc(c.name)}</span></div><div class="gbody">${rows}</div></div>`;
-  }).join("");
+    }).join("") || '<div class="lrow faint">Empty</div>';
+    teamHtml.push(`<div class="gcard"><div class="ghead" style="background:${c.hex};color:${c.fg}"><span>Team ${ci+1}</span><span>${esc(c.name)}</span></div><div class="gbody">${rows}</div></div>`);
+  }
+  grid.innerHTML=teamHtml.join("");
 }
 
 $("kminus").onclick=async()=>{kTouched=true;k=Math.max(1,k-1);$("kval").textContent=k;pushTeams();};

@@ -484,12 +484,47 @@ async def set_answers(body: AnswersBody, x_host_pin: str | None = Header(default
     return {"ok": True, "count": len(answers)}
 
 
+def _rebalance_teams(players, new_team_count, session_id):
+    if not players or new_team_count < 1:
+        return
+
+    target_base = len(players) // new_team_count
+    extras = len(players) % new_team_count
+    team_caps = [target_base + (1 if i < extras else 0) for i in range(new_team_count)]
+    
+    new_assignments = {}
+    current_counts = [0] * new_team_count
+    unassigned = []
+    
+    for p in players:
+        c = p["color_idx"]
+        if 0 <= c < new_team_count and current_counts[c] < team_caps[c]:
+            new_assignments[p["pid"]] = c
+            current_counts[c] += 1
+        else:
+            unassigned.append(p)
+            
+    for p in unassigned:
+        for c in range(new_team_count):
+            if current_counts[c] < team_caps[c]:
+                new_assignments[p["pid"]] = c
+                current_counts[c] += 1
+                break
+                
+    for p in players:
+        new_c = new_assignments.get(p["pid"], p["color_idx"])
+        if p["color_idx"] != new_c:
+            p["color_idx"] = new_c
+            _persist(store.set_color, session_id, p["pid"], new_c)
+
 @app.post("/api/host/teams")
 async def set_teams(body: TeamsBody, x_host_pin: str | None = Header(default=None)):
     room = _require_room()
     _require_host(x_host_pin, room)
 
     room["team_count"] = body.team_count
+    if room["phase"] == "live":
+        _rebalance_teams(_mem["players"], body.team_count, room["session_id"])
     _bump()
     _persist(store.set_team_count, body.team_count)
 
