@@ -488,8 +488,6 @@ async def set_answers(body: AnswersBody, x_host_pin: str | None = Header(default
 async def set_teams(body: TeamsBody, x_host_pin: str | None = Header(default=None)):
     room = _require_room()
     _require_host(x_host_pin, room)
-    if room["phase"] != "lobby":
-        raise HTTPException(409, "Team count can only change in the lobby.")
 
     room["team_count"] = body.team_count
     _bump()

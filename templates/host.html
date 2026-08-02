@@ -116,8 +116,8 @@ a{color:var(--dim)}
       <div class="chips" id="pchips"></div>
     </div>
 
-    <!-- lobby controls -->
-    <div class="card" id="c-lobby">
+    <!-- team controls -->
+    <div class="card" id="c-teams">
       <label>Number of color teams</label>
       <div class="stepper">
         <button class="btn ghost small" id="kminus">−</button>
@@ -126,7 +126,12 @@ a{color:var(--dim)}
         <span class="faint" id="kper"></span>
       </div>
       <div class="err" id="e-assign" style="margin-top:12px"></div>
-      <button class="btn full" id="b-assign" style="margin-top:14px">Assign colors & go live</button>
+      <p class="faint" style="margin-top:10px">Changes take effect immediately for new players joining.</p>
+    </div>
+
+    <!-- lobby controls -->
+    <div class="card" id="c-lobby">
+      <button class="btn full" id="b-assign">Assign colors & go live</button>
     </div>
 
     <!-- round controls -->
@@ -265,8 +270,10 @@ function renderAll(){
     return `<span class="chip ${(!live&&p.ready)?"ready":""}" style="cursor:pointer" onclick="kick('${p.pid}','${escName}')" title="Kick player">${dot}${esc(p.name)}${(!live&&p.ready)?" ✓":""}</span>`;
   }).join("")||'<span class="faint">No one yet…</span>';
 
-  // lobby stepper
-  if(!kTouched)k=Math.max(1,Math.min(hs.max_teams,Math.round(hs.players.length/4)||1));
+  // team stepper
+  if(live) { k = hs.team_count; kTouched = true; }
+  else if(!kTouched) { k = Math.max(1, Math.min(hs.max_teams, Math.round(hs.players.length/4) || 1)); }
+  
   k=Math.min(k,hs.max_teams);
   $("kval").textContent=k;
   $("kper").textContent=hs.players.length?("≈ "+Math.ceil(hs.players.length/k)+" per team"):"";
