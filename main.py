@@ -52,6 +52,8 @@ try:  # optional .env for local dev
 except ImportError:
     pass
 
+from concurrent.futures import ProcessPoolExecutor
+
 from db import Store
 from game import (
     ANSWER_MAX,
@@ -71,8 +73,19 @@ app.add_middleware(GZipMiddleware, minimum_size=200)
 
 store = Store()
 
-# Background thread pool for DB writes — fire-and-forget, never blocks requests
-_db_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="db-persist")
+def _db_worker_init():
+    global _worker_store
+    from db import Store
+    _worker_store = Store()
+
+def _db_worker_task(fn_name, *args):
+    try:
+        getattr(_worker_store, fn_name)(*args)
+    except Exception as e:
+        print(f"[worker] DB error on {fn_name}: {e}")
+
+# Background process pool for DB writes — never blocks the FastAPI GIL
+_db_pool = ProcessPoolExecutor(max_workers=1, initializer=_db_worker_init)
 
 _TEMPLATES = Path(__file__).parent / "templates"
 INDEX_HTML = (_TEMPLATES / "index.html").read_text(encoding="utf-8")
@@ -115,14 +128,12 @@ def _bump():
 
 
 def _persist(fn, *args):
-    """Fire-and-forget DB write. Runs in a background thread, never blocks
+    """Fire-and-forget DB write. Runs in a background process, never blocks
     the event loop or any request handler."""
-    def _safe():
-        try:
-            fn(*args)
-        except Exception as e:
-            print(f"[persist] {fn.__name__} error: {e}")
-    _db_pool.submit(_safe)
+    try:
+        _db_pool.submit(_db_worker_task, fn.__name__, *args)
+    except Exception as e:
+        print(f"[persist] submit error: {e}")
 
 
 def _find_player(pid: str):
