@@ -181,7 +181,7 @@ const err=(id,msg)=>{const e=$(id);e.textContent=msg||"";e.classList.toggle("sho
 const show=id=>{["s-setup","s-gate","s-dash"].forEach(s=>$(s).classList.toggle("hidden",s!==id));};
 
 let pin=localStorage.getItem("scramble_host_pin")||"";
-let hs=null,k=2,kTouched=false,ansDirty=false,pollTimer=null;
+let hs=null,k=2,kTouched=false,ansDirty=false,pollTimer=null,lastETag=null;
 
 $("logodots").innerHTML=["#FF3B30","#0A84FF","#2ECC71","#FFD60A"].map(c=>`<span style="background:${c}"></span>`).join("");
 
@@ -235,7 +235,15 @@ function startPoll(){stopPoll();pollTimer=setInterval(refresh,3000);}
 function stopPoll(){if(pollTimer)clearInterval(pollTimer);pollTimer=null;}
 
 async function refresh(){
-  try{hs=await api("/api/host/state");}catch(e){return;}
+  try{
+    const headers={"X-Host-Pin":pin};
+    if(lastETag)headers["If-None-Match"]=lastETag;
+    const r=await fetch("/api/host/state",{headers});
+    if(r.status===304)return; // nothing changed
+    lastETag=r.headers.get("etag")||null;
+    if(!r.ok)return;
+    hs=await r.json();
+  }catch(e){return;}
   renderAll();
 }
 

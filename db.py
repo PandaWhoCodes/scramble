@@ -233,3 +233,19 @@ class Store:
             "SELECT payload FROM round WHERE session_id = ? AND idx = ?", (session_id, idx)
         )
         return json.loads(rows[0][0]) if rows else None
+
+    def load_all(self):
+        """Load entire game state from DB. Called once at startup to hydrate
+        in-memory state. Returns (room, players, answers, rounds_dict)."""
+        room = self.get_room()
+        players, answers, rounds = [], [], {}
+        if room:
+            players = self.list_players(room["session_id"])
+            answers = self.list_answers(room["session_id"])
+            rows = self._query(
+                "SELECT idx, payload FROM round WHERE session_id = ? ORDER BY idx",
+                (room["session_id"],),
+            )
+            rounds = {int(r[0]): json.loads(r[1]) for r in rows}
+        return room, players, answers, rounds
+

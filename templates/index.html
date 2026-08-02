@@ -144,8 +144,8 @@ let name=localStorage.getItem("scramble_name")||"";
 /* ---------------- ui state (render is otherwise pure) --------------- */
 let joined=false, info=false, lastRound=null, lastRejoin=0, readyBusy=false, lastState=null;
 
-/* ---------------- resilient poll loop: DB is the truth -------------- */
-let fails=0, pollTimer=null;
+/* ---------------- resilient poll loop: memory is the truth ----------- */
+let fails=0, pollTimer=null, lastETag=null;
 const BASE_IV=()=>2600+Math.random()*1200;
 
 function schedule(ms){clearTimeout(pollTimer);pollTimer=setTimeout(tick,ms);}
@@ -153,13 +153,21 @@ function schedule(ms){clearTimeout(pollTimer);pollTimer=setTimeout(tick,ms);}
 async function tick(){
   let st;
   try{
-    const r=await fetch("/api/state?pid="+encodeURIComponent(pid),{cache:"no-store"});
+    const headers={};
+    if(lastETag)headers["If-None-Match"]=lastETag;
+    const r=await fetch("/api/state?pid="+encodeURIComponent(pid),{headers});
+    if(r.status===304){
+      // Nothing changed — skip render, save bandwidth
+      fails=0;$("reconnect").classList.remove("show");
+      return schedule(BASE_IV());
+    }
+    lastETag=r.headers.get("etag")||null;
     st=await r.json();
     lastState=st;
     fails=0;$("reconnect").classList.remove("show");
   }catch(e){
     fails++;$("reconnect").classList.add("show");
-    return schedule(Math.min(BASE_IV()*Math.pow(1.6,fails),15000)); // keep last screen, retry with backoff
+    return schedule(Math.min(BASE_IV()*Math.pow(1.6,fails),15000));
   }
   try{render(st);}catch(e){console.error(e);}
   schedule(BASE_IV());
