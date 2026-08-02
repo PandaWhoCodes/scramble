@@ -67,7 +67,15 @@ class Store:
         if url:
             import libsql  # pip install libsql
 
-            self._conn = libsql.connect(database=url, auth_token=token)
+            path = os.getenv("LOCAL_DB_PATH", "scramble_replica.db")
+            self._conn = libsql.connect(
+                database=path,
+                sync_url=url,
+                auth_token=token,
+                sync_interval=1.0,
+                _check_same_thread=False
+            )
+            self._conn.sync() # ensure initial sync
             self.backend = "turso"
         else:
             path = os.getenv("LOCAL_DB_PATH", "scramble.db")
