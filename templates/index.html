@@ -146,7 +146,7 @@ let joined=false, info=false, lastRound=null, lastRejoin=0, readyBusy=false, las
 
 /* ---------------- resilient poll loop: memory is the truth ----------- */
 let fails=0, pollTimer=null, lastETag=null;
-const BASE_IV=()=>2600+Math.random()*1200;
+const BASE_IV=()=>1000+Math.random()*1000;
 
 function schedule(ms){clearTimeout(pollTimer);pollTimer=setTimeout(tick,ms);}
 

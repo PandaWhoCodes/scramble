@@ -35,8 +35,8 @@ import aiohttp
 DEFAULT_ANSWERS = ["LOVE", "HERO", "BRAVE", "OPEN SOURCE", "SCRAMBLE",
                    "PYTHON", "FAST", "GAME", "PUZZLE", "TEAM"]
 HOST_PIN = "loadtest1234"
-POLL_INTERVAL_PLAYER = 3.0   # seconds between player polls (matches production)
-POLL_INTERVAL_HOST = 3.0     # seconds between host polls
+POLL_INTERVAL_PLAYER = 1.0   # seconds between player polls (matches user request)
+POLL_INTERVAL_HOST = 1.0     # seconds between host polls
 PLAYER_JOIN_STAGGER = 0.15   # seconds between each player joining (simulates real arrival)
 
 
@@ -58,6 +58,7 @@ class LoadTestResults:
     records: list = field(default_factory=list)
     phase_timestamps: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
+    patchy_internet: bool = False
 
     def add(self, rec: RequestRecord):
         self.records.append(rec)
@@ -84,6 +85,26 @@ class ScrambleClient:
         status = 0
         body = None
         size = 0
+
+        # --- Patchy Internet Simulation ---
+        if self.results.patchy_internet:
+            import random
+            import asyncio
+            # 15% chance to completely drop the request (timeout)
+            if random.random() < 0.15:
+                await asyncio.sleep(2.0)
+                error = "TIMEOUT (SIMULATED)"
+                latency = (time.monotonic() - t0) * 1000
+                self.results.add(RequestRecord(
+                    endpoint=f"{method} {path.split('?')[0]}", method=method, status=0,
+                    latency_ms=latency, timestamp=time.time(), error=error, size_bytes=0
+                ))
+                return 0, None, latency
+            
+            # 30% chance for a massive latency spike (2 to 6 seconds)
+            if random.random() < 0.30:
+                await asyncio.sleep(random.uniform(2.0, 6.0))
+
         try:
             kwargs = {"headers": headers or {}}
             if json_body is not None:
@@ -232,9 +253,10 @@ class HostSim:
 # ─── Test Orchestrator ────────────────────────────────────────────────
 
 async def run_load_test(base_url: str, num_players: int, num_rounds: int,
-                        num_host_screens: int = 2, poll_duration_per_round: float = 15.0):
+                        num_host_screens: int = 2, poll_duration_per_round: float = 15.0,
+                        num_teams: int = 0, patchy_internet: bool = False):
     """Run the full load test lifecycle."""
-    results = LoadTestResults()
+    results = LoadTestResults(patchy_internet=patchy_internet)
     client = ScrambleClient(base_url, results, "main")
 
     host = HostSim(client)
@@ -286,7 +308,7 @@ async def run_load_test(base_url: str, num_players: int, num_rounds: int,
         results.mark_phase("ready_complete")
 
         # Set team count
-        team_count = max(1, num_players // 4)
+        team_count = num_teams if num_teams > 0 else max(1, num_players // 4)
         await host.set_teams(session, team_count)
         print(f"   Teams set to {team_count}")
 
@@ -534,6 +556,10 @@ async def main():
                         help="Seconds of concurrent polling per round")
     parser.add_argument("--output", default=None,
                         help="File to write the report to (in addition to stdout)")
+    parser.add_argument("--teams", type=int, default=0,
+                        help="Number of teams to create (0 to auto-calculate)")
+    parser.add_argument("--patchy", action="store_true",
+                        help="Simulate a terrible internet connection (drops and high latency spikes)")
     args = parser.parse_args()
 
     results = await run_load_test(
@@ -542,6 +568,8 @@ async def main():
         num_rounds=args.rounds,
         num_host_screens=args.host_screens,
         poll_duration_per_round=args.poll_duration,
+        num_teams=args.teams,
+        patchy_internet=args.patchy,
     )
 
     report = generate_report(results, args.players, args.url)

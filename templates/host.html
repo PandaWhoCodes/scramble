@@ -231,7 +231,7 @@ async function unlock(){
   renderAll();startPoll();
 }
 
-function startPoll(){stopPoll();pollTimer=setInterval(refresh,3000);}
+function startPoll(){stopPoll();pollTimer=setInterval(refresh,1000);}
 function stopPoll(){if(pollTimer)clearInterval(pollTimer);pollTimer=null;}
 
 async function refresh(){
