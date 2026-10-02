@@ -57,10 +57,9 @@ label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-botto
 .piecebox .word{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
 .piecebox .word.rot{transform:translate(-50%,-50%) rotate(-90deg)}
 .piecebox svg{display:block;width:100%;height:100%;overflow:visible}
-.infolayer{position:absolute;left:50%;transform:translateX(-50%);top:calc(10px + env(safe-area-inset-top,0px));
-  z-index:5;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
-.infolayer .pill,.infolayer .hint{background:rgba(0,0,0,.5);color:#fff;border-radius:99px;padding:6px 14px;white-space:nowrap}
-.infolayer .hint{font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;opacity:.95}
+.infolayer{position:absolute;left:50%;transform:translateX(-50%);top:calc(50px + env(safe-area-inset-top,0px));
+  z-index:5;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:max-content;max-width:92vw}
+.infolayer .hint{background:rgba(15,20,28,0.78);border:1px solid rgba(255,255,255,0.14);backdrop-filter:blur(10px);color:#fff;border-radius:99px;padding:6px 14px;white-space:normal;text-align:center;font-size:12px;font-weight:500;box-shadow:0 4px 14px rgba(0,0,0,0.25)}
 .shape{display:flex;flex-direction:column;gap:8px;align-items:center}
 .shape .word{display:flex;gap:5px}
 .shape .cell{width:16px;height:20px;border-radius:4px;border:2px solid currentColor;opacity:.75}
@@ -68,6 +67,62 @@ label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-botto
 .teamnum{font-weight:700;line-height:.95;font-size:clamp(90px,32vw,190px)}
 .mates{font-size:14px;opacity:.9;line-height:1.6;max-width:420px}
 .subtle{font-size:12px;opacity:.65}
+.team-select-chip{padding:12px;border-radius:14px;border:2px solid var(--border);background:var(--card2);
+  color:var(--text);font:inherit;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:10px;text-align:left;transition:all .12s}
+.team-select-chip.selected{border-color:#fff;background:rgba(255,255,255,.08);box-shadow:0 0 0 1px #fff}
+.team-chip-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.team-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;transition:border-color .15s}
+.team-card.mine{border-color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.05)}
+.btn-team-action{padding:6px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:var(--text);color:var(--bg);white-space:nowrap}
+.btn-team-action:disabled{opacity:0.35;cursor:default}
+.btn-team-leave{background:transparent;border:1px solid var(--border);color:var(--dim);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.comp-drawer{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
+  z-index:50;width:calc(100% - 24px);max-width:440px;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:auto}
+.comp-winner-banner{background:#2ECC71;color:#06341B;font-weight:700;font-size:14px;border-radius:999px;
+  padding:8px 18px;box-shadow:0 4px 16px rgba(0,0,0,.4);text-align:center}
+.comp-cooldown{font-size:13px;font-weight:700;color:#FF9B9B;background:rgba(42,21,24,.92);border:1px solid #4A2528;border-radius:999px;padding:5px 16px}
+.shake{animation:sh .4s ease-in-out}
+@keyframes sh{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.team-top-badge{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  z-index:25;display:inline-flex;align-items:center;gap:7px;padding:6px 16px;border-radius:999px;
+  background:rgba(15,20,28,0.85);border:1px solid rgba(255,255,255,0.18);backdrop-filter:blur(12px);color:#ffffff;font-size:13px;font-weight:700;
+  letter-spacing:0.04em;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.35);pointer-events:none}
+.team-top-badge-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.team-top-badge-sep{opacity:0.35;margin:0 2px;font-weight:400}
+.team-top-badge-round{font-weight:600;opacity:0.9}
+.btn-switch-team {
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  margin-top: 8px;
+  transition: all 0.15s ease;
+}
+.btn-switch-team:hover {
+  background: rgba(255,255,255,0.25);
+  border-color: rgba(255,255,255,0.45);
+}
+.btn-drawer-switch {
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #ffffff;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.15s ease;
+}
+.btn-drawer-switch:hover {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.5);
+}
 </style>
 </head>
 <body>
@@ -103,22 +158,63 @@ label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-botto
   <section id="s-lobby" class="hidden" style="display:flex;flex-direction:column;gap:18px;text-align:center;align-items:center">
     <div class="pulse" id="pulse"></div>
     <h2>You're in, <span id="lb-name"></span></h2>
-    <p class="dim">Tap ready when you are. The host assigns colors once everyone's set.</p>
+    <div id="lb-team-picker" class="hidden" style="width:100%; display:flex; flex-direction:column; gap:12px; margin-top:4px;">
+      <!-- Active team banner if player is in a team -->
+      <div id="my-team-banner" class="hidden"></div>
+
+      <!-- Team list & creation form -->
+      <div id="teams-mgmt-box" style="display:flex; flex-direction:column; gap:10px; width:100%;">
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+          <label style="font-size:12px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.08em; text-align:left;">Teams &amp; Members</label>
+          <button id="b-toggle-create" type="button" style="background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:12px; font-weight:700; padding:5px 12px; cursor:pointer;">+ Create Team</button>
+        </div>
+
+        <!-- Inline team creation box -->
+        <div id="create-team-card" class="hidden" style="display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--card2); border:1px solid var(--border); border-radius:14px; text-align:left;">
+          <div style="font-size:13px; font-weight:700; color:var(--text);">Create a new team</div>
+          <div style="display:flex; gap:8px;">
+            <input id="new-team-input" class="field" style="height:42px; font-size:14px; padding:0 12px; border-radius:10px;" placeholder="Team name (e.g. Code Crusaders)" maxlength="24">
+            <button id="b-create-team-sub" type="button" class="btn" style="height:42px; width:auto; padding:0 16px; font-size:13px; border-radius:10px; white-space:nowrap;">Create</button>
+          </div>
+          <div class="err" id="e-team-create"></div>
+        </div>
+
+        <!-- Dynamic list of teams -->
+        <div id="team-select-chips" style="display:flex; flex-direction:column; gap:8px; width:100%;"></div>
+      </div>
+    </div>
+    <p class="dim" id="lb-copy">Tap ready when you are. The host assigns colors once everyone's set.</p>
     <button class="btn readybtn" id="b-ready">I'm ready</button>
     <div class="countline" id="lb-counts"></div>
+  </section>
+
+  <!-- celebratory finished screen on mobile -->
+  <section id="s-finished" class="hidden" style="display:flex; flex-direction:column; gap:16px; text-align:center; align-items:center; padding:18px 10px;">
+    <div id="fin-mob-icon" style="font-size:64px; filter:drop-shadow(0 0 16px rgba(242,194,48,0.5));">🏆</div>
+    <div id="fin-mob-title" style="font-size:24px; font-weight:900; color:#F2C230; text-transform:uppercase; letter-spacing:0.02em;">Tournament Complete</div>
+    <div id="fin-mob-sub" style="font-size:16px; font-weight:700; color:var(--text); line-height:1.4;">Winners declared on the projector screen!</div>
+    <div id="fin-mob-score" style="font-size:14px; color:var(--dim); padding:8px 16px; background:var(--card2); border:1px solid var(--border); border-radius:12px; width:100%; max-width:320px; display:none;"></div>
+    <div style="font-size:13px; color:var(--dim); margin-top:8px;">Look at the projector screen for the full final standings!</div>
   </section>
 </div>
 
 <!-- full-screen color stage: team screen, letters, solver -->
 <div id="stage">
-  <div id="st-top" class="pill"></div>
+  <div id="st-team-badge" class="team-top-badge hidden">
+    <span id="st-team-badge-dot" class="team-top-badge-dot"></span>
+    <span id="st-team-badge-name"></span>
+    <span id="st-team-badge-sep" class="team-top-badge-sep">·</span>
+    <span id="st-team-badge-round" class="team-top-badge-round"></span>
+  </div>
+  <div id="st-top" class="pill" style="display:none!important"></div>
 
   <!-- team screen (between rounds) -->
   <div id="st-team" class="hidden" style="display:flex;flex-direction:column;align-items:center;gap:14px">
     <div class="teamnum" id="tm-num"></div>
     <div class="bigname" id="tm-color" style="font-size:clamp(28px,7vw,44px)"></div>
     <p class="mates" id="tm-mates"></p>
-    <p class="subtle" id="tm-copy">Gather your color. Letters land here when the host starts the round.</p>
+    <p class="subtle" id="tm-copy">Gather your team. Letters land here when the host starts the round.</p>
+    <button id="b-leave-team-stage" class="btn-switch-team hidden" onclick="leaveTeamAndSwitch(event)">Wrong team? Switch team</button>
   </div>
 
   <!-- letters -->
@@ -130,12 +226,29 @@ label{font-size:14px;font-weight:700;color:var(--dim);display:block;margin-botto
   </div>
 </div>
 
+<!-- Buzzer Answer Drawer (Competitive Mode) -->
+<div id="comp-answer-drawer" class="comp-drawer hidden">
+  <div id="comp-winner-banner" class="comp-winner-banner hidden">
+    <span id="comp-winner-msg">🏆 Round won!</span>
+  </div>
+  <div style="display:flex; align-items:center; justify-content:space-between; width:100%; max-width:440px; padding:0 4px;">
+    <div id="comp-drawer-team-pill" style="font-size:12px; font-weight:700; color:rgba(255,255,255,0.9); background:rgba(0,0,0,0.55); padding:3px 12px; border-radius:999px; backdrop-filter:blur(6px);"></div>
+    <button id="b-drawer-switch-team" type="button" class="btn-drawer-switch" onclick="leaveTeamAndSwitch(event)">Switch team</button>
+  </div>
+  <form id="comp-answer-form" style="display:flex; gap:8px; width:100%;" onsubmit="submitCompAnswer(event)">
+    <input id="comp-answer-input" class="field" style="border-radius:14px; background:rgba(21, 27, 35, 0.92); backdrop-filter:blur(8px); border-color:rgba(255,255,255,0.25); font-size:16px;" placeholder="Type team answer..." autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+    <button id="comp-answer-submit" type="submit" class="btn" style="width:auto; padding:0 22px; border-radius:14px; white-space:nowrap; background:#fff; color:#0d1117;">Buzz</button>
+  </form>
+  <div id="comp-cooldown-msg" class="comp-cooldown hidden"></div>
+</div>
+
+
 <script>
 const PALETTE=["#FF3B30","#0A84FF","#2ECC71","#FFD60A","#AF52DE","#FF9500","#FF2D92","#00C7BE","#5856D6","#BEF264","#32ADE6","#A2845E"];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 const err=(id,msg)=>{const e=$(id);e.textContent=msg||"";e.classList.toggle("show",!!msg);};
-const sections=["s-code","s-name","s-lobby"];
+const sections=["s-code","s-name","s-lobby","s-finished"];
 function showSection(id){sections.forEach(s=>$(s).classList.toggle("hidden",s!==id));$("stage").classList.remove("show");}
 function showStage(){sections.forEach(s=>$(s).classList.add("hidden"));$("stage").classList.add("show");}
 
@@ -366,13 +479,140 @@ function render(st){
   }
   joined=true;
 
-  if(st.phase==="lobby"){
+  const isComp = st.game_mode === "competitive";
+  const myTeamIdx = (st.you.color && st.you.team_number != null) ? (st.you.team_number - 1) : -1;
+  const needsTeam = isComp && (myTeamIdx < 0);
+
+  if(st.phase === "finished"){
+    showSection("s-finished");
+    $("comp-answer-drawer").classList.add("hidden");
+    const wSum = st.winner_summary;
+    const champ = wSum && wSum.winners && wSum.winners[0];
+    const isWinner = champ && (champ.color_idx === myTeamIdx);
+
+    if(wSum && wSum.winners && wSum.winners.length > 0){
+      if(wSum.is_tie){
+        $("fin-mob-icon").textContent = "🤝";
+        $("fin-mob-title").textContent = "CO-CHAMPIONS TIE!";
+        $("fin-mob-sub").textContent = `Co-Champions tied with ${wSum.top_score} points!`;
+      } else if(isWinner){
+        $("fin-mob-icon").textContent = "🏆";
+        $("fin-mob-title").textContent = "YOU WON THE GAME!";
+        $("fin-mob-sub").textContent = `Congratulations! Your team (${champ.name}) won the tournament with ${champ.score} points!`;
+      } else {
+        $("fin-mob-icon").textContent = "🎉";
+        $("fin-mob-title").textContent = `${champ.name.toUpperCase()} WINS!`;
+        $("fin-mob-sub").textContent = `Team ${champ.name} won the tournament with ${champ.score} points!`;
+      }
+    } else {
+      $("fin-mob-icon").textContent = "🎉";
+      $("fin-mob-title").textContent = "GAME COMPLETE!";
+      $("fin-mob-sub").textContent = "All rounds have been played. Great teamwork!";
+    }
+
+    if(myTeamIdx >= 0 && wSum && wSum.leaderboard){
+      const myTeam = wSum.leaderboard.find(t => t.color_idx === myTeamIdx);
+      $("fin-mob-score").textContent = myTeam ? `Your team finished with ${myTeam.score} pts` : "";
+      $("fin-mob-score").style.display = myTeam ? "block" : "none";
+    } else {
+      $("fin-mob-score").style.display = "none";
+    }
+    return;
+  }
+
+  if(st.phase==="lobby" || needsTeam){
     info=false;lastRound=null;
     $("lb-name").textContent=st.you.name;
     const rb=$("b-ready");
-    rb.classList.toggle("on",st.you.ready);
-    rb.textContent=st.you.ready?"Ready ✓ (tap to undo)":"I'm ready";
-    $("lb-counts").textContent=`${st.counts.players} in · ${st.counts.ready} ready`;
+    if(needsTeam){
+      rb.classList.add("hidden");
+      $("lb-counts").textContent = `Round ${st.round ? st.round.idx+1 : 1} in progress`;
+    } else {
+      rb.classList.remove("hidden");
+      rb.classList.toggle("on",st.you.ready);
+      rb.textContent=st.you.ready?"Ready ✓ (tap to undo)":"I'm ready";
+      $("lb-counts").textContent=`${st.counts.players} in · ${st.counts.ready} ready`;
+    }
+
+    if(isComp && (st.allow_team_choice || needsTeam)){
+      $("lb-team-picker").classList.remove("hidden");
+      if(needsTeam){
+        $("lb-copy").innerHTML = `<span style="color:#F2C230; font-weight:700;">Game in progress!</span> Pick or create your team below to jump in:`;
+      } else {
+        $("lb-copy").textContent="Form or join your team above, then tap ready when you're set!";
+      }
+      const palette = st.palette || PALETTE;
+      const myTeamIdx = (st.you.color && st.you.team_number != null) ? (st.you.team_number - 1) : -1;
+      const customTeams = st.custom_teams || [];
+      const maxMembers = st.max_team_members || 4;
+      const allPlayers = st.players || [];
+
+      // Render My Team Banner if assigned
+      const myTeamBanner = $("my-team-banner");
+      if(myTeamIdx >= 0){
+        myTeamBanner.classList.remove("hidden");
+        const myTeamObj = customTeams.find(t => t.color_idx === myTeamIdx);
+        const myColor = st.you.color || {hex:"#4A90F0", name:"Team "+(myTeamIdx+1)};
+        const tName = myTeamObj ? myTeamObj.name : (st.you.team_name || myColor.name);
+        const teammates = (st.you.teammates && st.you.teammates.length)
+          ? `${st.you.teammates.join(", ")}, You`
+          : "Only you so far";
+        myTeamBanner.innerHTML = `
+          <div style="padding:12px 14px; border-radius:14px; background:var(--card2); border:1.5px solid ${myColor.hex}; display:flex; align-items:center; justify-content:space-between; gap:10px; text-align:left;">
+            <div style="min-width:0; overflow:hidden;">
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--dim); font-weight:700;">Your Team</div>
+              <div style="font-size:17px; font-weight:700; color:${myColor.hex}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(tName)}</div>
+              <div style="font-size:12px; color:var(--dim); margin-top:2px;">${esc(teammates)}</div>
+            </div>
+            <button class="btn-team-leave" type="button" onclick="chooseTeam(-1)">Leave</button>
+          </div>
+        `;
+      } else {
+        myTeamBanner.classList.add("hidden");
+      }
+
+      // Render Teams List
+      const teamsList = $("team-select-chips");
+      let listHtml = "";
+      if(customTeams.length === 0){
+        listHtml = `<div style="font-size:13px; color:var(--dim); padding:16px 10px; background:var(--card2); border:1px dashed var(--border); border-radius:12px; text-align:center;">No teams created yet.<br><span style="font-weight:600; color:var(--text);">Tap '+ Create Team'</span> to start the first team!</div>`;
+      } else {
+        customTeams.forEach(t => {
+          const members = allPlayers.filter(p => p.color_idx === t.color_idx);
+          const isMine = (myTeamIdx === t.color_idx);
+          const isFull = members.length >= maxMembers;
+          const memberNames = members.map(m => m.name).join(", ");
+          listHtml += `
+            <div class="team-card ${isMine ? 'mine' : ''}" style="border-left:4px solid ${t.hex};">
+              <div style="min-width:0; flex-grow:1;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-weight:700; font-size:15px; color:${t.hex}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.name)}</span>
+                  <span style="font-size:12px; color:var(--dim); font-weight:600; flex-shrink:0;">(${members.length}/${maxMembers})</span>
+                </div>
+                <div style="font-size:12px; color:var(--dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${esc(memberNames) || "Waiting for players…"}
+                </div>
+              </div>
+              <div style="flex-shrink:0;">
+                ${isMine ? `
+                  <span style="font-size:12px; font-weight:700; color:#2ECC71;">Joined ✓</span>
+                ` : (isFull ? `
+                  <button class="btn-team-action" style="opacity:0.4; cursor:default;" disabled>Full</button>
+                ` : `
+                  <button class="btn-team-action" onclick="chooseTeam(${t.color_idx})">Join</button>
+                `)}
+              </div>
+            </div>
+          `;
+        });
+      }
+      teamsList.innerHTML = listHtml;
+    } else {
+      $("lb-team-picker").classList.add("hidden");
+      $("lb-copy").textContent="Tap ready when you are. The host assigns colors once everyone's set.";
+    }
+
+    $("comp-answer-drawer").classList.add("hidden");
     showSection("s-lobby");
     return;
   }
@@ -383,31 +623,82 @@ function render(st){
   const overlay=col.fg==="#FFFFFF"?"rgba(0,0,0,.18)":"rgba(255,255,255,.35)";
   showStage();
 
+  const teamDisplayName = st.you.team_name || (st.you.color ? st.you.color.name : (st.you.team_number ? ("Team " + st.you.team_number) : ""));
+  const badge = $("st-team-badge");
+  if (badge) {
+    if (teamDisplayName) {
+      $("st-team-badge-name").textContent = teamDisplayName;
+      $("st-team-badge-dot").style.background = col.hex || "#ffffff";
+      const roundTxt = st.round ? `Round ${st.round.idx+1}${st.total_rounds ? ' of ' + st.total_rounds : ''}` : "";
+      if ($("st-team-badge-round")) {
+        $("st-team-badge-round").textContent = roundTxt;
+        $("st-team-badge-round").style.display = roundTxt ? "inline" : "none";
+        $("st-team-badge-sep").style.display = roundTxt ? "inline" : "none";
+      }
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+
+  // Buzzer Drawer Handling (active for any team member during competitive round, even if late joiner)
+  const drawer = $("comp-answer-drawer");
+  if(isComp && st.round && (st.you.color != null)){
+    drawer.classList.remove("hidden");
+    if ($("comp-drawer-team-pill")) {
+      $("comp-drawer-team-pill").textContent = teamDisplayName ? `Buzzer for ${teamDisplayName}` : "Team Buzzer";
+    }
+    $("comp-answer-input").placeholder = teamDisplayName ? `Type answer for ${teamDisplayName}...` : "Type team answer...";
+
+    if(st.round_winner){
+      const w = st.round_winner;
+      const myTeamIdx = (st.you.team_number != null) ? (st.you.team_number - 1) : -1;
+      const isMyTeam = (myTeamIdx === w.team_idx);
+      $("comp-winner-banner").classList.remove("hidden");
+      if(isMyTeam){
+        $("comp-winner-msg").textContent = `🎉 YOUR TEAM (${teamDisplayName.toUpperCase()}) WON ROUND ${w.round + 1}! ("${w.answer}")`;
+      } else {
+        $("comp-winner-msg").textContent = `🏆 Won by ${w.team_name} (${w.player_name})`;
+      }
+      $("comp-answer-input").disabled = true;
+      $("comp-answer-submit").disabled = true;
+    } else {
+      $("comp-winner-banner").classList.add("hidden");
+      $("comp-answer-input").disabled = false;
+      $("comp-answer-submit").disabled = false;
+    }
+  } else {
+    drawer.classList.add("hidden");
+  }
+
   if(st.round&&st.round.idx!==lastRound){lastRound=st.round.idx;info=false;}
   if(!st.round)lastRound=null;
 
   if(!st.round){ // team screen between rounds
-    $("st-top").textContent="Your team";$("st-top").style.background=overlay;
+    $("st-top").textContent=teamDisplayName || "Your team";$("st-top").style.background=overlay;
     $("st-team").classList.remove("hidden");$("st-round").classList.add("hidden");
     $("tm-num").textContent=st.you.team_number||"";
-    $("tm-color").textContent=col.name;
+    $("tm-color").textContent=(teamDisplayName||col.name).toUpperCase();
     $("tm-mates").textContent=st.you.teammates.length?("With: "+st.you.teammates.join(" · ")):"";
-    $("tm-copy").textContent="Gather your color. Your piece of the answer lands here when the host starts the round.";
+    $("tm-copy").textContent="Gather with your team. Your piece of the answer lands here when the host starts the round.";
+    if($("b-leave-team-stage")){
+      $("b-leave-team-stage").classList.toggle("hidden", !isComp);
+    }
     return;
   }
 
-  // active round — MINIMAL by default: just your piece/tile, nothing else.
-  // A tap toggles a small info layer (round number + hint). No shape boxes,
-  // no teammate list — the screen IS the game piece.
+  // active round
   $("st-team").classList.add("hidden");$("st-round").classList.remove("hidden");
-  $("st-top").textContent=`Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""}`;
+  $("st-top").textContent=`${teamDisplayName ? teamDisplayName + ' · ' : ''}Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""}`;
   $("st-top").style.background=overlay;
   $("st-top").style.visibility=info?"visible":"hidden";
   $("shape").innerHTML="";$("rd-mates").textContent="";
 
   if(!st.round.in_round){ // joined after this round was dealt
-    $("st-top").style.visibility="visible";
-    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(22px,6vw,34px);padding:.5em .7em">You're on team ${st.you.team_number} — you join the next deal. Help them solve!</div>`;
+    const joinMsg = isComp
+      ? `You joined <b>${esc(teamDisplayName)}</b>!<br><span style="font-size:14px;opacity:0.85;display:inline-block;margin-top:6px;">Letters arrive next round · Help your team buzz!</span><br><button class="btn-switch-team" style="margin-top:12px; display:inline-block;" onclick="leaveTeamAndSwitch(event)">Wrong team? Switch team</button>`
+      : `You're on team ${st.you.team_number} — you join the next deal. Help them solve!`;
+    $("tiles").innerHTML=`<div class="tile" style="background:${overlay};font-size:clamp(18px,5vw,26px);padding:.7em 1em;max-width:380px;line-height:1.4;">${joinMsg}</div>`;
     $("rd-hint").textContent="";
     return;
   }
@@ -474,11 +765,13 @@ function render(st){
         <svg viewBox="${bb.x} ${bb.y} ${bb.w} ${bb.h}" preserveAspectRatio="xMidYMid meet">
           <text x="0" y="0" font-size="100" font-weight="700" fill="${col.fg}"
             font-family="'Space Grotesk',sans-serif" letter-spacing="2">${esc(text)}</text></svg></div>`;
-      $("infolayer").innerHTML=`<div class="pill">Round ${st.round.idx+1}${st.total_rounds?` of ${st.total_rounds}`:""}</div>
-        <div class="hint">${landscape?"Turn your phone sideways ⟳ · ":""}${pieces.length>1?"Solo round: put your pieces in order":"Line up with your team"}</div>`;
-      $("infolayer").style.visibility=info?"visible":"hidden";
-      $("st-top").style.visibility="hidden";   // the pill now lives in the overlay
-      $("rd-hint").textContent="";
+      const isViewportLandscape = window.innerWidth > window.innerHeight;
+      const orientHint = (landscape && !isViewportLandscape) ? "Turn your phone sideways ⟳ · " : "";
+      const taskHint = pieces.length > 1 ? "Solo round: put your pieces in order" : "Line up with your team";
+      $("infolayer").innerHTML = `<div class="hint">${orientHint}${taskHint}</div>`;
+      $("infolayer").style.visibility = info ? "visible" : "hidden";
+      $("st-top").style.visibility = "hidden";
+      $("rd-hint").textContent = "";
     }
   }
 }
@@ -557,6 +850,130 @@ $("b-ready").onclick=async()=>{
 };
 
 $("stage").onclick=()=>{info=!info;if(lastState)render(lastState);};
+
+/* ── Competitive Mode Handlers ── */
+$("comp-answer-drawer").onclick=(e)=>{e.stopPropagation();};
+
+$("b-toggle-create").onclick = () => {
+  const card = $("create-team-card");
+  card.classList.toggle("hidden");
+  if (!card.classList.contains("hidden")) {
+    $("new-team-input").focus();
+  }
+};
+
+$("b-create-team-sub").onclick = async () => {
+  err("e-team-create");
+  const nameVal = $("new-team-input").value.trim();
+  if (!nameVal) {
+    err("e-team-create", "Please enter a team name.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/team/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ code, pid, name: nameVal })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "Could not create team.");
+    $("new-team-input").value = "";
+    $("create-team-card").classList.add("hidden");
+    refreshFromHTTP();
+  } catch(e) {
+    err("e-team-create", e.message);
+  }
+};
+
+$("new-team-input").onkeydown = (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $("b-create-team-sub").click();
+  }
+};
+
+window.chooseTeam = async (color_idx) => {
+  try {
+    const res = await fetch("/api/team/select", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ code, pid, color_idx })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "Could not choose team.");
+    refreshFromHTTP();
+  } catch(e) {
+    alert(e.message);
+  }
+};
+
+window.leaveTeamAndSwitch = async (e) => {
+  if (e) e.stopPropagation();
+  if (!confirm("Are you sure you want to leave this team and switch?")) return;
+  await chooseTeam(-1);
+};
+
+let answerCooldownUntil = 0;
+window.submitCompAnswer = async (e) => {
+  if (e) e.preventDefault();
+  const inp = $("comp-answer-input");
+  const guess = (inp.value || "").trim();
+  if (!guess) return;
+
+  const now = Date.now();
+  if (now < answerCooldownUntil) {
+    return;
+  }
+
+  const subBtn = $("comp-answer-submit");
+  subBtn.disabled = true;
+
+  try {
+    const res = await fetch("/api/round/submit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ code, pid, guess })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "Submission failed.");
+
+    if (d.correct) {
+      inp.value = "";
+      $("comp-cooldown-msg").classList.add("hidden");
+      refreshFromHTTP();
+    } else if (d.cooldown) {
+      inp.classList.add("shake");
+      setTimeout(() => inp.classList.remove("shake"), 400);
+      answerCooldownUntil = Date.now() + (d.cooldown * 1000);
+      showCooldownTimer(d.cooldown);
+    } else if (d.won) {
+      refreshFromHTTP();
+    }
+  } catch(err) {
+    alert(err.message);
+  } finally {
+    subBtn.disabled = false;
+  }
+};
+
+let _cdTimer = null;
+function showCooldownTimer(seconds) {
+  if (_cdTimer) clearInterval(_cdTimer);
+  const cMsg = $("comp-cooldown-msg");
+  cMsg.classList.remove("hidden");
+  let left = Math.ceil(seconds);
+  cMsg.textContent = `Incorrect! Try again in ${left}s`;
+  _cdTimer = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      clearInterval(_cdTimer);
+      _cdTimer = null;
+      cMsg.classList.add("hidden");
+    } else {
+      cMsg.textContent = `Incorrect! Try again in ${left}s`;
+    }
+  }, 1000);
+}
 
 function boot(){
   $("code").value=code;$("name").value=name;

@@ -62,6 +62,11 @@ def clean_answer(s):
     return clean_text(s, ANSWER_MAX)
 
 
+def normalize_guess(s):
+    """Compare answers ignoring spaces and special characters."""
+    return re.sub(r"[^A-Za-z0-9]+", "", str(s or "")).upper()
+
+
 def answer_letters(answer):
     return [ch for ch in answer.upper() if ch.isalnum()]
 
