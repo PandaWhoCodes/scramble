@@ -62,6 +62,11 @@ def clean_answer(s):
     return clean_text(s, ANSWER_MAX)
 
 
+def normalize_guess(s):
+    """Compare answers ignoring spaces and special characters."""
+    return re.sub(r"[^A-Za-z0-9]+", "", str(s or "")).upper()
+
+
 def answer_letters(answer):
     return [ch for ch in answer.upper() if ch.isalnum()]
 
@@ -106,6 +111,89 @@ def make_snapshot(idx, answer, players, edge_marks=True, allow_flips=True):
     if len(answer_letters(answer)) <= PUZZLE_MAX_LETTERS:
         return _puzzle_snapshot(idx, answer, players, edge_marks, allow_flips)
     return _pieces_snapshot(idx, answer, players)
+
+
+def redeal_single_team(snapshot, answer, players, target_ci, edge_marks=True, allow_flips=True):
+    """Re-deal pieces or puzzle tiles strictly for a single team (target_ci).
+
+    Preserves all existing assignments, tiles, rotations, and fit scales for
+    every other team in the room. This ensures mid-round joins/leaves on one team
+    never reshuffle the physical phone lineup of any other team.
+    """
+    if not snapshot or target_ci < 0:
+        return
+
+    mode = snapshot.get("mode", "pieces")
+    assignments = snapshot.setdefault("assignments", {})
+    target_pids = [p["pid"] for p in players if p["color_idx"] == target_ci]
+
+    if mode == "pieces":
+        letters = answer_letters(answer)
+        if len(target_pids) == 0:
+            pass
+        elif len(target_pids) == 1:
+            k = min(3, max(1, len(letters)))
+            pieces = _contiguous_pieces(letters, k)
+            random.shuffle(pieces)
+            assignments[target_pids[0]] = pieces
+        else:
+            order = target_pids[:]
+            random.shuffle(order)
+            k = min(len(order), len(letters))
+            pieces = _contiguous_pieces(letters, k) if k else []
+            for i, pid in enumerate(order):
+                assignments[pid] = [pieces[i]] if i < k else []
+
+        fit_scale = snapshot.setdefault("fit_scale", {})
+        scales = []
+        for pid in target_pids:
+            p = next((x for x in players if x["pid"] == pid), None)
+            pieces = assignments.get(pid) or []
+            if p and p.get("fit") and pieces:
+                scales.append(_fit_scale(p["fit"], "  ".join(pieces)))
+        if scales:
+            fit_scale[str(target_ci)] = round(min(scales), 4)
+        elif str(target_ci) in fit_scale:
+            del fit_scale[str(target_ci)]
+
+    elif mode == "puzzle":
+        letters_str = "".join(answer_letters(answer))
+        team_plans = snapshot.setdefault("teams", {})
+        if len(target_pids) == 0:
+            team_plans.pop(str(target_ci), None)
+        else:
+            plan = _best_plan(letters_str, len(target_pids))
+            groups, tiles, mark_i = [], [], 0
+            for gi, g in enumerate(plan["groups"]):
+                W = len(g["text"]) * LU
+                tw, th = W / g["cols"], LH / g["rows"]
+                marks = []
+                if edge_marks:
+                    for r in range(g["rows"]):
+                        for c in range(g["cols"] - 1):
+                            marks.append({"x": (c + 1) * tw, "y": (r + 0.5) * th, "c": MARKC[mark_i % len(MARKC)]})
+                            mark_i += 1
+                    for r in range(g["rows"] - 1):
+                        for c in range(g["cols"]):
+                            marks.append({"x": (c + 0.5) * tw, "y": (r + 1) * th, "c": MARKC[mark_i % len(MARKC)]})
+                            mark_i += 1
+                groups.append({"text": g["text"], "rows": g["rows"], "cols": g["cols"], "w": W, "h": LH, "marks": marks})
+                for r in range(g["rows"]):
+                    for c in range(g["cols"]):
+                        tiles.append({
+                            "g": gi,
+                            "rc": [r, c],
+                            "vb": [round(c * tw, 2), round(r * th, 2), round(tw, 2), round(th, 2)],
+                            "rot": random.choice(_legal_rots(tw, th, allow_flips)),
+                        })
+            order = target_pids[:]
+            random.shuffle(order)
+            for i, pid in enumerate(order):
+                assignments[pid] = tiles[i] if i < len(tiles) else {"solver": True}
+            team_plans[str(target_ci)] = {"groups": groups}
+
+    snapshot["made_at"] = int(time.time() * 1000)
+
 
 
 GLYPH_W = 64.0   # Space Grotesk 700 average advance per letter at font-size 100, incl. letter-spacing 2

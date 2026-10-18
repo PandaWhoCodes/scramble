@@ -39,13 +39,26 @@ of server state.
    full group text, so the answer is technically present in the page source
    during the round. Fine for party play; if it ever matters, the hardening
    path is server-side tile rendering to PNG.
-5. **Back** returns to the previous round (the exact same deal is replayed
+6. **Back** returns to the previous round (the exact same deal is replayed
    from its stored snapshot), **Re-deal** reshuffles the current round — e.g.
    after a late joiner, who gets a team immediately but letters only when the
    next deal happens.
 
 Phones show the word's *shape* (word count + letter boxes) but never the
 answer; the answer is only visible on the PIN-protected host console.
+
+## Game Modes
+
+### Classic Mode (Default)
+Pure cooperative event play. The host directs rounds using Next / Back / Re-deal, advancing at their own pace. Answers can be edited or extended mid-game on the host console. When the host reaches the end of the answer list, clicking Next displays *"No more answers — add a few more below"* so extra rounds can be added seamlessly. Late joiners are slotted into a team immediately and receive their letters at the next deal.
+
+### Competitive Arena Mode
+A tournament race where teams compete for points:
+- **Custom Team Creation & Choice**: In the lobby, participants can create their own custom-named teams or join existing ones, with an adjustable team member cap (e.g. max 4 players per team).
+- **Physical Line-Up Team Buzzer**: Staying true to Scramble's physical lineup philosophy, teams must assemble their phones side-by-side on the table. Once the word is physically formed, any team member hits **"BUZZ! WE'RE LINED UP!"** on their phone.
+- **Host Referee Verification**: Buzzing alerts the projector and host screens with the team name and timestamp. The host inspects the physical phone assembly on the table and taps **"Award +1 Point"** (or dismisses false alarms). Because phones send no typed text, DevTools inspection of puzzle DOM elements provides zero cheat advantage.
+- **Scoped Mid-Round Re-dealing**: If a participant joins, leaves, or switches teams mid-round, the server re-deals *only* that specific affected team. All other teams' physical phone lineups and pieces remain completely frozen.
+- **Live Projector Scoreboard & Celebration**: The `/projector` screen displays team standings during rounds, flashes buzz alerts, and displays a celebratory tournament winner ceremony with confetti when the host clicks **Finish Game**.
 
 ## Resilience model (the whole point)
 

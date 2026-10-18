@@ -33,6 +33,10 @@ _STATEMENTS = [
         edge_marks INTEGER NOT NULL DEFAULT 1,
         allow_flips INTEGER NOT NULL DEFAULT 1,
         piece_orient TEXT NOT NULL DEFAULT 'auto',
+        game_mode TEXT NOT NULL DEFAULT 'classic',
+        scores TEXT NOT NULL DEFAULT '{}',
+        round_winner TEXT DEFAULT NULL,
+        allow_team_choice INTEGER NOT NULL DEFAULT 1,
         opened_at INTEGER NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS player (
@@ -85,6 +89,12 @@ class Store:
                 "ALTER TABLE room ADD COLUMN edge_marks INTEGER NOT NULL DEFAULT 1",
                 "ALTER TABLE room ADD COLUMN allow_flips INTEGER NOT NULL DEFAULT 1",
                 "ALTER TABLE room ADD COLUMN piece_orient TEXT NOT NULL DEFAULT 'auto'",
+                "ALTER TABLE room ADD COLUMN game_mode TEXT NOT NULL DEFAULT 'classic'",
+                "ALTER TABLE room ADD COLUMN scores TEXT NOT NULL DEFAULT '{}'",
+                "ALTER TABLE room ADD COLUMN round_winner TEXT DEFAULT NULL",
+                "ALTER TABLE room ADD COLUMN allow_team_choice INTEGER NOT NULL DEFAULT 1",
+                "ALTER TABLE room ADD COLUMN custom_teams TEXT NOT NULL DEFAULT '[]'",
+                "ALTER TABLE room ADD COLUMN max_team_members INTEGER NOT NULL DEFAULT 4",
             ):
                 try:
                     self._conn.execute(mig)
@@ -107,7 +117,8 @@ class Store:
     def get_room(self):
         rows = self._query(
             "SELECT session_id, phase, join_code, pin_hash, team_count, current_round, "
-            "edge_marks, allow_flips, piece_orient, opened_at FROM room WHERE id = 1"
+            "edge_marks, allow_flips, piece_orient, opened_at, "
+            "game_mode, scores, round_winner, allow_team_choice, custom_teams, max_team_members FROM room WHERE id = 1"
         )
         if not rows:
             return None
@@ -123,17 +134,42 @@ class Store:
             "allow_flips": bool(r[7]),
             "piece_orient": r[8] or "auto",
             "opened_at": r[9],
+            "game_mode": r[10] or "classic",
+            "scores": json.loads(r[11]) if r[11] else {},
+            "round_winner": json.loads(r[12]) if r[12] else None,
+            "allow_team_choice": bool(r[13]) if r[13] is not None else True,
+            "custom_teams": json.loads(r[14]) if len(r) > 14 and r[14] else [],
+            "max_team_members": int(r[15]) if len(r) > 15 and r[15] is not None else 4,
         }
 
-    def open_room(self, session_id, join_code, pin_hash, ts):
+    def open_room(self, session_id, join_code, pin_hash, ts, game_mode="classic"):
         self._exec(
             "INSERT OR REPLACE INTO room (id, session_id, phase, join_code, pin_hash, team_count, current_round, "
-            "edge_marks, allow_flips, piece_orient, opened_at) VALUES (1, ?, 'lobby', ?, ?, 1, -1, 1, 1, 'auto', ?)",
-            (session_id, join_code, pin_hash, ts),
+            "edge_marks, allow_flips, piece_orient, opened_at, game_mode, scores, round_winner, allow_team_choice, custom_teams, max_team_members) "
+            "VALUES (1, ?, 'lobby', ?, ?, 1, -1, 1, 1, 'auto', ?, ?, '{}', NULL, 1, '[]', 4)",
+            (session_id, join_code, pin_hash, ts, game_mode),
         )
 
     def set_phase(self, phase):
         self._exec("UPDATE room SET phase = ? WHERE id = 1", (phase,))
+
+    def set_game_mode(self, mode):
+        self._exec("UPDATE room SET game_mode = ? WHERE id = 1", (mode,))
+
+    def set_scores(self, scores_dict):
+        self._exec("UPDATE room SET scores = ? WHERE id = 1", (json.dumps(scores_dict),))
+
+    def set_round_winner(self, winner_dict):
+        self._exec("UPDATE room SET round_winner = ? WHERE id = 1", (json.dumps(winner_dict) if winner_dict else None,))
+
+    def set_team_choice(self, allow_team_choice):
+        self._exec("UPDATE room SET allow_team_choice = ? WHERE id = 1", (1 if allow_team_choice else 0,))
+
+    def set_custom_teams(self, custom_teams):
+        self._exec("UPDATE room SET custom_teams = ? WHERE id = 1", (json.dumps(custom_teams),))
+
+    def set_max_team_members(self, n):
+        self._exec("UPDATE room SET max_team_members = ? WHERE id = 1", (n,))
 
     def set_team_count(self, n):
         self._exec("UPDATE room SET team_count = ? WHERE id = 1", (n,))
@@ -150,7 +186,7 @@ class Store:
     def reset_to_lobby(self):
         """End the game but keep the crowd: colors and ready flags clear,
         rounds wiped, answers and players stay."""
-        self._exec("UPDATE room SET phase = 'lobby', current_round = -1 WHERE id = 1")
+        self._exec("UPDATE room SET phase = 'lobby', current_round = -1, round_winner = NULL, scores = '{}' WHERE id = 1")
         self._exec("UPDATE player SET ready = 0, color_idx = -1")
         self._exec("DELETE FROM round")
 

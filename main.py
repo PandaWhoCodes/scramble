@@ -69,6 +69,8 @@ from game import (
     clean_text,
     deal_colors,
     make_snapshot,
+    normalize_guess,
+    redeal_single_team,
     smallest_team,
 )
 
@@ -104,8 +106,16 @@ def hash_pin(pin: str) -> str:
 
 
 def _join_url(request: Request, room: dict) -> str:
-    base = os.getenv("BASE_URL") or str(request.base_url).rstrip("/")
-    return f"{base}/?c={room['join_code']}"
+    base = os.getenv("BASE_URL")
+    if not base:
+        host = request.headers.get("host", "").lower() if request else ""
+        if "scrambles.fly.dev" in host:
+            base = "https://scrambles.fly.dev"
+        elif request:
+            base = str(request.base_url).rstrip("/")
+        else:
+            base = "https://scrambles.fly.dev"
+    return f"{base.rstrip('/')}/?c={room['join_code']}"
 
 
 # ─────────────────────────────────────── in-memory state (the hot path)
@@ -119,6 +129,8 @@ _mem = {
     "rounds": {},       # {0: snapshot, 1: snapshot, ...}
     "version": 0,       # monotonic; bumped on every mutation, used for ETags
     "kicked_pids": set(), # pids that have been removed by the host
+    "guess_cooldowns": {}, # {pid: last_guess_timestamp} for buzzer rate limit
+    "buzz_cooldowns": {},  # {color_idx: penalty_expiry_timestamp} for false-buzz lockout
 }
 
 
@@ -179,6 +191,99 @@ def _require_room():
 def _require_host(pin: str | None, room: dict):
     if not hmac.compare_digest(hash_pin(pin or ""), room["pin_hash"]):
         raise HTTPException(401, "Wrong host PIN.")
+
+
+def _redeal_active_round_single_team_if_live(room: dict, affected_color_indices: set[int] | list[int]):
+    """Re-deal ONLY the specified teams' pieces in competitive mode if a round is live.
+
+    In Classic mode or when no teams are specified, this does nothing: late joiners
+    wait for the host to deal the next round as designed.
+    In Competitive mode, only the teams whose membership actually changed are re-dealt,
+    ensuring all other teams' physical phone lineups remain completely frozen.
+    """
+    if not room or room.get("game_mode") != "competitive":
+        return
+    cur = room.get("current_round", -1)
+    answers = _mem.get("answers", [])
+    if room.get("phase") == "live" and 0 <= cur < len(answers):
+        snap = _mem["rounds"].get(cur)
+        if not snap:
+            return
+        edge_marks = room.get("edge_marks", True)
+        allow_flips = room.get("allow_flips", True)
+        for ci in set(affected_color_indices):
+            if ci is not None and ci >= 0:
+                redeal_single_team(snap, answers[cur], _mem["players"], ci, edge_marks, allow_flips)
+        _persist(store.save_round, room["session_id"], cur, snap, snap["made_at"])
+        _notify("REDEAL", round=cur)
+
+
+def _calc_winner_summary(room: dict) -> dict | None:
+    if not room or room.get("phase") != "finished" or room.get("game_mode") != "competitive":
+        return None
+    scores = room.get("scores", {})
+    # If no scores or top score is 0, do not declare a champion/tie
+    top_score = max([int(v) for v in scores.values()], default=0)
+    if top_score <= 0:
+        return None
+    custom_teams = room.get("custom_teams", [])
+    players = _mem.get("players", [])
+    team_count = room.get("team_count", 1)
+
+    team_indices = set()
+    for ct in custom_teams:
+        team_indices.add(ct["color_idx"])
+    for p in players:
+        if p["color_idx"] >= 0:
+            team_indices.add(p["color_idx"])
+    for i in range(team_count):
+        team_indices.add(i)
+
+    team_list = []
+    for ci in sorted(team_indices):
+        ct = next((t for t in custom_teams if t["color_idx"] == ci), None)
+        palette_item = PALETTE[ci % len(PALETTE)]
+        name = ct["name"] if ct else ("Team " + str(ci + 1))
+        hex_col = ct.get("hex", palette_item["hex"]) if ct else palette_item["hex"]
+        fg_col = ct.get("fg", palette_item.get("fg", "#ffffff")) if ct else palette_item.get("fg", "#ffffff")
+        pts = int(scores.get(str(ci), 0))
+        members = [p["name"] for p in players if p["color_idx"] == ci]
+        team_list.append({
+            "idx": ci,
+            "color_idx": ci,
+            "name": name,
+            "hex": hex_col,
+            "fg": fg_col,
+            "score": pts,
+            "members": members,
+        })
+
+    team_list.sort(key=lambda t: (t["score"], len(t["members"])), reverse=True)
+    winners = [t for t in team_list if t["score"] == top_score] if team_list else []
+    is_tie = len(winners) > 1
+
+    return {
+        "top_score": top_score,
+        "is_tie": is_tie,
+        "winners": winners,
+        "leaderboard": team_list,
+    }
+
+
+def _get_custom_teams_with_roster(room: dict) -> list[dict]:
+    teams = room.get("custom_teams", [])
+    if not teams:
+        return []
+    players = _mem.get("players", [])
+    out = []
+    for t in teams:
+        m_names = [p["name"] for p in players if p["color_idx"] == t["color_idx"]]
+        t_copy = dict(t)
+        t_copy["member_count"] = len(m_names)
+        t_copy["member_names"] = m_names
+        out.append(t_copy)
+    return out
+
 
 
 def _etag_response(request: Request, data: dict, extra_headers: dict | None = None):
@@ -243,6 +348,38 @@ def join_rate_ok(ip: str) -> bool:
 class OpenRoomBody(BaseModel):
     pin: str = Field(min_length=4, max_length=64)
     answers: list[str] = Field(default_factory=list, max_length=MAX_ANSWERS)
+    game_mode: Literal["classic", "competitive"] = "classic"
+
+
+class ModeBody(BaseModel):
+    mode: Literal["classic", "competitive"]
+
+
+class TeamSelectBody(BaseModel):
+    code: str = Field(max_length=16)
+    pid: str = Field(min_length=4, max_length=64)
+    color_idx: int = Field(ge=-1, le=MAX_TEAMS - 1)
+
+
+class CreateTeamBody(BaseModel):
+    code: str = Field(max_length=16)
+    pid: str = Field(min_length=4, max_length=64)
+    name: str = Field(min_length=1, max_length=30)
+
+
+class TeamLimitBody(BaseModel):
+    max_team_members: int = Field(ge=1, le=20)
+
+
+class RoundBuzzBody(BaseModel):
+    code: str = Field(max_length=16)
+    pid: str = Field(min_length=4, max_length=64)
+
+
+class ScoreAdjustBody(BaseModel):
+    color_idx: int = Field(ge=0, le=MAX_TEAMS - 1)
+    delta: int | None = None
+    score: int | None = None
 
 
 class JoinBody(BaseModel):
@@ -323,8 +460,15 @@ async def projector_state(request: Request):
         "exists": True,
         "session_id": room["session_id"],
         "join_code": room["join_code"],
-        "join_url": f"{request.base_url}?c={room['join_code']}",
+        "join_url": _join_url(request, room),
         "phase": room["phase"],
+        "game_mode": room.get("game_mode", "classic"),
+        "scores": room.get("scores", {}),
+        "round_winner": room.get("round_winner"),
+        "round_buzz": room.get("round_buzz"),
+        "winner_summary": _calc_winner_summary(room),
+        "custom_teams": _get_custom_teams_with_roster(room),
+        "max_team_members": room.get("max_team_members", 4),
         "current_round": room["current_round"],
         "total_rounds": len(_mem["answers"]),
         "team_count": room["team_count"],
@@ -349,7 +493,7 @@ async def room_info():
     room = _mem["room"]
     if not room:
         return {"exists": False}
-    return {"exists": True, "phase": room["phase"]}
+    return {"exists": True, "phase": room["phase"], "game_mode": room.get("game_mode", "classic")}
 
 
 @app.post("/api/room")
@@ -368,23 +512,29 @@ async def open_room(body: OpenRoomBody, request: Request):
     _mem["room"] = {
         "session_id": session_id, "phase": "lobby", "join_code": join_code,
         "pin_hash": pin_h, "team_count": 1, "current_round": -1,
-        "edge_marks": True, "allow_flips": True, "piece_orient": "auto", "opened_at": ts,
+        "edge_marks": True, "allow_flips": True, "piece_orient": "auto",
+        "game_mode": body.game_mode,
+        "scores": {}, "round_winner": None, "allow_team_choice": True,
+        "custom_teams": [], "max_team_members": 4,
+        "opened_at": ts,
     }
     _mem["players"] = []
     _mem["rounds"] = {}
     _mem["kicked_pids"] = set()
+    _mem["guess_cooldowns"] = {}
+    _mem["buzz_cooldowns"] = {}
     answers = [clean_answer(a) for a in body.answers]
     answers = [a for a in answers if a][:MAX_ANSWERS]
     _mem["answers"] = answers
     _bump()
 
     # Persist in background
-    _persist(store.open_room, session_id, join_code, pin_h, ts)
+    _persist(store.open_room, session_id, join_code, pin_h, ts, body.game_mode)
     if answers:
         _persist(store.replace_answers, session_id, answers)
 
     return {"ok": True, "join_code": join_code, "join_url": _join_url(request, _mem["room"]),
-            "ws_url": _RT_URL}
+            "game_mode": body.game_mode, "ws_url": _RT_URL}
 
 
 @app.get("/api/state")
@@ -410,8 +560,17 @@ async def state(pid: str = "", request: Request = None):
         "exists": True,
         "session_id": room["session_id"],
         "phase": room["phase"],
+        "game_mode": room.get("game_mode", "classic"),
+        "scores": room.get("scores", {}),
+        "round_winner": room.get("round_winner"),
+        "round_buzz": room.get("round_buzz"),
+        "winner_summary": _calc_winner_summary(room),
+        "allow_team_choice": room.get("allow_team_choice", True),
+        "custom_teams": _get_custom_teams_with_roster(room),
+        "max_team_members": room.get("max_team_members", 4),
         "current_round": room["current_round"],
         "total_rounds": len(_mem["answers"]),
+        "team_count": room["team_count"],
         "counts": {"players": len(players), "ready": sum(1 for p in players if p["ready"])},
         "settings": {"piece_orient": room.get("piece_orient", "auto")},
         "you": None,
@@ -420,10 +579,13 @@ async def state(pid: str = "", request: Request = None):
     if not me:
         return _etag_response(request, out) if request else JSONResponse(out)
 
-    you = {"name": me["name"], "ready": me["ready"], "color": None, "team_number": None, "teammates": []}
+    you = {"name": me["name"], "ready": me["ready"], "color": None, "team_number": None, "team_name": None, "teammates": []}
     if me["color_idx"] >= 0:
-        you["color"] = PALETTE[me["color_idx"] % len(PALETTE)]
+        custom_t = next((t for t in room.get("custom_teams", []) if t["color_idx"] == me["color_idx"]), None)
+        color_item = PALETTE[me["color_idx"] % len(PALETTE)]
+        you["color"] = color_item
         you["team_number"] = me["color_idx"] + 1
+        you["team_name"] = custom_t["name"] if custom_t else color_item["name"]
         you["teammates"] = [
             p["name"] for p in players if p["color_idx"] == me["color_idx"] and p["pid"] != pid
         ]
@@ -489,10 +651,11 @@ async def join(body: JoinBody, request: Request):
         existing = {"pid": pid, "name": name, "ready": False, "color_idx": -1}
         _mem["players"].append(existing)
 
-    # Late joiner while the game is live: slot into the smallest team
+    # Late joiner while the game is live: slot into the smallest team (Classic mode only)
     if room["phase"] == "live" and existing["color_idx"] < 0:
-        existing["color_idx"] = smallest_team(_mem["players"], room["team_count"])
-        _persist(store.set_color, room["session_id"], pid, existing["color_idx"])
+        if room.get("game_mode") != "competitive":
+            existing["color_idx"] = smallest_team(_mem["players"], room["team_count"])
+            _persist(store.set_color, room["session_id"], pid, existing["color_idx"])
 
     _bump()
     _persist(store.upsert_player, room["session_id"], pid, name, ts)
@@ -532,6 +695,214 @@ async def fit(body: FitBody):
     return {"ok": True}
 
 
+@app.post("/api/team/create")
+async def create_team(body: CreateTeamBody):
+    room = _require_room()
+    if body.code.strip().upper() != room["join_code"]:
+        raise HTTPException(403, "Wrong room code.")
+    if room.get("game_mode") != "competitive":
+        raise HTTPException(400, "Team creation is only available in competitive mode.")
+
+    name = clean_text(body.name, 24).strip()
+    if not name:
+        raise HTTPException(400, "Team name cannot be empty.")
+
+    pid = clean_text(body.pid, 64)
+    player = _find_player(pid)
+    if not player:
+        raise HTTPException(404, "Join first.")
+
+    custom_teams = room.setdefault("custom_teams", [])
+    if any(t["name"].lower() == name.lower() for t in custom_teams):
+        raise HTTPException(400, "A team with that name already exists.")
+
+    if len(custom_teams) >= MAX_TEAMS:
+        raise HTTPException(400, f"Maximum number of teams ({MAX_TEAMS}) reached.")
+
+    # Find the first unused color_idx in 0..MAX_TEAMS-1
+    used_idxs = {t["color_idx"] for t in custom_teams}
+    new_idx = next((i for i in range(MAX_TEAMS) if i not in used_idxs), len(custom_teams))
+    color_item = PALETTE[new_idx % len(PALETTE)]
+
+    team_entry = {
+        "idx": new_idx,
+        "name": name,
+        "color_idx": new_idx,
+        "hex": color_item["hex"],
+        "fg": color_item["fg"],
+        "created_by": pid,
+    }
+    custom_teams.append(team_entry)
+    room["team_count"] = max(room["team_count"], len(custom_teams))
+    old_ci = player["color_idx"]
+    player["color_idx"] = new_idx
+    affected = {old_ci, new_idx} if old_ci >= 0 else {new_idx}
+    _redeal_active_round_single_team_if_live(room, affected)
+    _bump()
+    _persist(store.set_custom_teams, custom_teams)
+    _persist(store.set_team_count, room["team_count"])
+    _persist(store.set_color, room["session_id"], pid, new_idx)
+    _notify("TEAM_CREATED", team=team_entry, pid=pid)
+
+    return {"ok": True, "team": team_entry, "color_idx": new_idx}
+
+
+@app.post("/api/team/select")
+async def select_team(body: TeamSelectBody):
+    room = _require_room()
+    if body.code.strip().upper() != room["join_code"]:
+        raise HTTPException(403, "Wrong room code.")
+    if room.get("game_mode") != "competitive":
+        raise HTTPException(400, "Team selection is only available in competitive mode.")
+
+    pid = clean_text(body.pid, 64)
+    player = _find_player(pid)
+    if not player:
+        raise HTTPException(404, "Join first.")
+
+    old_ci = player["color_idx"]
+    # Leaving team / unassigning
+    if body.color_idx == -1:
+        player["color_idx"] = -1
+        cur = room.get("current_round", -1)
+        if 0 <= cur < len(_mem.get("answers", [])):
+            snap = _mem["rounds"].get(cur)
+            if snap and "assignments" in snap:
+                snap["assignments"].pop(pid, None)
+        if old_ci >= 0:
+            _redeal_active_round_single_team_if_live(room, {old_ci})
+        _bump()
+        _persist(store.set_color, room["session_id"], pid, -1)
+        _notify("PLAYER_TEAM_CHANGED", pid=pid, color_idx=-1)
+        return {"ok": True, "color_idx": -1}
+
+    # Validate team existence
+    custom_teams = room.get("custom_teams", [])
+    if custom_teams:
+        if not any(t["color_idx"] == body.color_idx for t in custom_teams):
+            raise HTTPException(400, "Selected team does not exist.")
+    else:
+        if body.color_idx < 0 or body.color_idx >= room["team_count"]:
+            raise HTTPException(400, "Invalid team.")
+
+    # Capacity check
+    max_members = room.get("max_team_members", 4)
+    current_members = [p for p in _mem["players"] if p["color_idx"] == body.color_idx and p["pid"] != pid]
+    if len(current_members) >= max_members:
+        raise HTTPException(400, f"Team is full (max {max_members} members).")
+
+    player["color_idx"] = body.color_idx
+    affected = {old_ci, body.color_idx} if old_ci >= 0 else {body.color_idx}
+    _redeal_active_round_single_team_if_live(room, affected)
+    _bump()
+    _persist(store.set_color, room["session_id"], pid, body.color_idx)
+    _notify("PLAYER_TEAM_CHANGED", pid=pid, color_idx=body.color_idx)
+    return {"ok": True, "color_idx": body.color_idx}
+
+
+@app.post("/api/round/buzz")
+async def round_buzz(body: RoundBuzzBody):
+    """Team Line-up Buzzer. A player buzzes in when their team has physically
+    lined up their phones on the table. The host inspects the physical phones
+    and awards the point."""
+    room = _require_room()
+    if body.code.strip().upper() != room["join_code"]:
+        raise HTTPException(403, "Wrong room code.")
+    if room.get("game_mode") != "competitive":
+        raise HTTPException(400, "Buzzer is only available in competitive mode.")
+    if room["phase"] != "live" or room["current_round"] < 0:
+        raise HTTPException(400, "No active round.")
+
+    if room.get("round_winner"):
+        return {"ok": False, "won": True, "winner": room["round_winner"], "message": "Round already solved!"}
+
+    pid = clean_text(body.pid, 64)
+    player = _find_player(pid)
+    if not player or player["color_idx"] < 0:
+        raise HTTPException(400, "You must be on a team to buzz in.")
+
+    ci = player["color_idx"]
+    now = time.time()
+    penalty_until = _mem.get("buzz_cooldowns", {}).get(ci, 0)
+    if now < penalty_until:
+        rem = max(1, int(round(penalty_until - now)))
+        raise HTTPException(429, f"False buzz penalty! Your team is locked out for {rem}s.")
+
+    cur_buzz = room.get("round_buzz")
+    if cur_buzz:
+        if cur_buzz.get("color_idx") == ci:
+            return {"ok": True, "already_buzzed": True, "buzz": cur_buzz}
+        raise HTTPException(409, f"Team {cur_buzz.get('team_name')} buzzed in first!")
+
+    custom_t = next((t for t in room.get("custom_teams", []) if t["color_idx"] == ci), None)
+    palette_item = PALETTE[ci % len(PALETTE)]
+    team_name = custom_t["name"] if custom_t else palette_item["name"]
+    team_hex = custom_t["hex"] if custom_t else palette_item["hex"]
+
+    buzz_data = {
+        "color_idx": ci,
+        "team_name": team_name,
+        "hex": team_hex,
+        "player_name": player["name"],
+        "pid": pid,
+        "round": room["current_round"],
+        "buzzed_at": int(time.time() * 1000),
+    }
+    room["round_buzz"] = buzz_data
+    _bump()
+    _notify("ROUND_BUZZ", buzz=buzz_data)
+    return {"ok": True, "buzz": buzz_data}
+
+
+@app.post("/api/host/buzz/award")
+async def host_buzz_award(x_host_pin: str | None = Header(default=None)):
+    """Host verifies the physical phone line-up and awards +1 point to the buzzed team."""
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    buzz = room.get("round_buzz")
+    if not buzz:
+        raise HTTPException(400, "No pending team buzz to award.")
+
+    cur = room.get("current_round", -1)
+    answers = _mem.get("answers", [])
+    answer_str = answers[cur] if 0 <= cur < len(answers) else ""
+    ci = buzz["color_idx"]
+    scores = room.setdefault("scores", {})
+    team_key = str(ci)
+    scores[team_key] = scores.get(team_key, 0) + 1
+
+    winner_info = {
+        "team_idx": ci,
+        "team_name": buzz["team_name"],
+        "player_name": buzz["player_name"],
+        "pid": buzz["pid"],
+        "answer": answer_str,
+        "round": cur,
+        "timestamp": int(time.time() * 1000),
+    }
+    room["round_winner"] = winner_info
+    room["round_buzz"] = None
+    _bump()
+    _persist(store.set_scores, scores)
+    _persist(store.set_round_winner, winner_info)
+    _notify("ROUND_WIN", winner=winner_info, scores=scores)
+    return {"ok": True, "winner": winner_info, "scores": scores}
+
+
+@app.post("/api/host/buzz/dismiss")
+async def host_buzz_dismiss(x_host_pin: str | None = Header(default=None)):
+    """Host dismisses a false or incomplete line-up buzz, reopening buzzers with a 5s lockout for the false buzzer."""
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    buzz = room.get("round_buzz")
+    if buzz and buzz.get("color_idx") is not None:
+        _mem.setdefault("buzz_cooldowns", {})[buzz["color_idx"]] = time.time() + 5.0
+    room["round_buzz"] = None
+    _bump()
+    _notify("ROUND_BUZZ_DISMISSED")
+    return {"ok": True}
+
+
 @app.get("/api/qr")
 async def qr(request: Request, code: str = ""):
     room = _require_room()
@@ -567,6 +938,14 @@ async def host_state(request: Request, x_host_pin: str | None = Header(default=N
         "join_url": _join_url(request, room),
         "team_count": room["team_count"],
         "current_round": room["current_round"],
+        "game_mode": room.get("game_mode", "classic"),
+        "scores": room.get("scores", {}),
+        "round_winner": room.get("round_winner"),
+        "round_buzz": room.get("round_buzz"),
+        "winner_summary": _calc_winner_summary(room),
+        "allow_team_choice": room.get("allow_team_choice", True),
+        "custom_teams": _get_custom_teams_with_roster(room),
+        "max_team_members": room.get("max_team_members", 4),
         "settings": {
             "edge_marks": room["edge_marks"],
             "allow_flips": room["allow_flips"],
@@ -581,6 +960,44 @@ async def host_state(request: Request, x_host_pin: str | None = Header(default=N
         "ws_url": _RT_URL or None,
     }
     return JSONResponse(out, headers={"ETag": etag, "Cache-Control": "no-cache"})
+
+
+@app.post("/api/host/mode")
+async def set_game_mode(body: ModeBody, x_host_pin: str | None = Header(default=None)):
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    room["game_mode"] = body.mode
+    _bump()
+    _persist(store.set_game_mode, body.mode)
+    _notify("MODE_CHANGED", game_mode=body.mode)
+    return {"ok": True, "game_mode": body.mode}
+
+
+@app.post("/api/host/team_limit")
+async def set_team_limit(body: TeamLimitBody, x_host_pin: str | None = Header(default=None)):
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    room["max_team_members"] = body.max_team_members
+    _bump()
+    _persist(store.set_max_team_members, body.max_team_members)
+    _notify("TEAM_LIMIT_CHANGED", max_team_members=body.max_team_members)
+    return {"ok": True, "max_team_members": body.max_team_members}
+
+
+@app.post("/api/host/scores")
+async def adjust_scores(body: ScoreAdjustBody, x_host_pin: str | None = Header(default=None)):
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    scores = room.setdefault("scores", {})
+    team_key = str(body.color_idx)
+    if body.score is not None:
+        scores[team_key] = max(0, body.score)
+    elif body.delta is not None:
+        scores[team_key] = max(0, scores.get(team_key, 0) + body.delta)
+    _bump()
+    _persist(store.set_scores, scores)
+    _notify("SCORES_UPDATED", scores=scores)
+    return {"ok": True, "scores": scores}
 
 
 @app.post("/api/host/answers")
@@ -643,12 +1060,10 @@ async def set_teams(body: TeamsBody, x_host_pin: str | None = Header(default=Non
     room["team_count"] = body.team_count
     if room["phase"] == "live":
         _rebalance_teams(_mem["players"], body.team_count, room["session_id"])
-        
-        # Instantly re-deal the current round if one is active so the new teams get correct tiles
         cur = room["current_round"]
         if cur >= 0 and cur < len(_mem["answers"]):
             snap = make_snapshot(cur, _mem["answers"][cur], _mem["players"],
-                                 room["edge_marks"], room["allow_flips"])
+                                 room.get("edge_marks", True), room.get("allow_flips", True))
             _mem["rounds"][cur] = snap
             _persist(store.save_round, room["session_id"], cur, snap, snap["made_at"])
 
@@ -688,12 +1103,37 @@ async def assign_colors(x_host_pin: str | None = Header(default=None)):
     if len(players) < room["team_count"]:
         raise HTTPException(400, f"Fewer players than teams — reduce teams or wait for more players.")
 
-    # Memory first
+    if room.get("game_mode") == "competitive":
+        custom_teams = room.get("custom_teams", [])
+        if custom_teams:
+            for p in players:
+                if p["color_idx"] < 0 or not any(t["color_idx"] == p["color_idx"] for t in custom_teams):
+                    team_counts = {t["color_idx"]: sum(1 for pl in players if pl["color_idx"] == t["color_idx"]) for t in custom_teams}
+                    smallest_ci = min(team_counts, key=team_counts.get)
+                    p["color_idx"] = smallest_ci
+                    _persist(store.set_color, room["session_id"], p["pid"], smallest_ci)
+        else:
+            for p in players:
+                if p["color_idx"] < 0 or p["color_idx"] >= room["team_count"]:
+                    p["color_idx"] = smallest_team(players, room["team_count"])
+                    _persist(store.set_color, room["session_id"], p["pid"], p["color_idx"])
+        room["phase"] = "live"
+        room["current_round"] = -1
+        room["round_winner"] = None
+        _bump()
+        _persist(store.set_phase, "live")
+        _persist(store.set_current_round, -1)
+        _persist(store.set_round_winner, None)
+        _notify("GAME_START")
+        return {"ok": True}
+
+    # Classic mode: Memory first
     color_map = deal_colors(players, room["team_count"])
     for p in players:
         p["color_idx"] = color_map.get(p["pid"], p["color_idx"])
     room["phase"] = "live"
     room["current_round"] = -1
+    room["round_winner"] = None
     _bump()
 
     # Persist in background
@@ -701,6 +1141,7 @@ async def assign_colors(x_host_pin: str | None = Header(default=None)):
         _persist(store.set_color, room["session_id"], pid, ci)
     _persist(store.set_phase, "live")
     _persist(store.set_current_round, -1)
+    _persist(store.set_round_winner, None)
     _notify("GAME_START")
 
     return {"ok": True}
@@ -710,18 +1151,40 @@ async def assign_colors(x_host_pin: str | None = Header(default=None)):
 async def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=None)):
     room = _require_room()
     _require_host(x_host_pin, room)
-    if room["phase"] != "live":
+    if room["phase"] not in ("live", "finished"):
         raise HTTPException(409, "Assign colors first.")
     answers = _mem["answers"]
     cur = room["current_round"]
 
+    # Reset round winner and buzz on any navigation
+    room["round_winner"] = None
+    room["round_buzz"] = None
+    _mem["buzz_cooldowns"] = {}
+    _persist(store.set_round_winner, None)
+
+    if body.action in ("finish", "end"):
+        room["phase"] = "finished"
+        _persist(store.set_phase, "finished")
+        _bump()
+        _notify("GAME_END", phase="finished")
+        return {"ok": True, "phase": "finished"}
+
+    if body.action == "resume":
+        room["phase"] = "live"
+        _persist(store.set_phase, "live")
+        _bump()
+        _notify("NEXT", round=room["current_round"])
+        return {"ok": True, "phase": "live"}
+
     if body.action == "next":
+        if room["phase"] == "finished":
+            raise HTTPException(400, "Game is finished.")
         nxt = cur + 1
         if nxt >= len(answers):
             raise HTTPException(409, "No more answers — add a few more below.")
         if nxt not in _mem["rounds"]:
             snap = make_snapshot(nxt, answers[nxt], _mem["players"],
-                                 room["edge_marks"], room["allow_flips"])
+                                 room.get("edge_marks", True), room.get("allow_flips", True))
             _mem["rounds"][nxt] = snap
             _persist(store.save_round, room["session_id"], nxt, snap, snap["made_at"])
         room["current_round"] = nxt
@@ -729,6 +1192,9 @@ async def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=Non
         _bump()
         _notify("NEXT", round=nxt)
     elif body.action == "back":
+        if room["phase"] == "finished":
+            room["phase"] = "live"
+            _persist(store.set_phase, "live")
         room["current_round"] = max(-1, cur - 1)
         _persist(store.set_current_round, room["current_round"])
         _bump()
@@ -737,7 +1203,7 @@ async def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=Non
         if cur < 0:
             raise HTTPException(400, "No active round to re-deal.")
         snap = make_snapshot(cur, answers[cur], _mem["players"],
-                             room["edge_marks"], room["allow_flips"])
+                             room.get("edge_marks", True), room.get("allow_flips", True))
         _mem["rounds"][cur] = snap
         _persist(store.save_round, room["session_id"], cur, snap, snap["made_at"])
         _bump()
@@ -748,6 +1214,22 @@ async def round_nav(body: RoundBody, x_host_pin: str | None = Header(default=Non
     return {"ok": True}
 
 
+@app.post("/api/host/finish")
+async def finish_game(x_host_pin: str | None = Header(default=None)):
+    room = _require_room()
+    _require_host(x_host_pin, room)
+    if room["phase"] not in ("live", "finished"):
+        raise HTTPException(400, "Game is not live.")
+    room["phase"] = "finished"
+    room["round_winner"] = None
+    room["round_buzz"] = None
+    _persist(store.set_round_winner, None)
+    _persist(store.set_phase, "finished")
+    _bump()
+    _notify("GAME_END", phase="finished")
+    return {"ok": True, "phase": "finished"}
+
+
 @app.post("/api/host/lobby")
 async def back_to_lobby(x_host_pin: str | None = Header(default=None)):
     room = _require_room()
@@ -755,6 +1237,12 @@ async def back_to_lobby(x_host_pin: str | None = Header(default=None)):
 
     room["phase"] = "lobby"
     room["current_round"] = -1
+    room["round_winner"] = None
+    room["round_buzz"] = None
+    room["scores"] = {}
+    room["custom_teams"] = []
+    _mem["guess_cooldowns"] = {}
+    _mem["buzz_cooldowns"] = {}
     for p in _mem["players"]:
         p["ready"] = False
         p["color_idx"] = -1
@@ -762,6 +1250,7 @@ async def back_to_lobby(x_host_pin: str | None = Header(default=None)):
     _bump()
 
     _persist(store.reset_to_lobby)
+    _persist(store.set_custom_teams, [])
     _notify("GAME_END")
 
     return {"ok": True}

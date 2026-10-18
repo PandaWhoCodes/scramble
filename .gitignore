@@ -8,4 +8,5 @@ env/
 venv/
 .venv/
 scramble.db
+*.docx
 .DS_Store
